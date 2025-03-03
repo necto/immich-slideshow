@@ -1,0 +1,9 @@
+version: '3'
+
+services:
+  image-server:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./static:/app/static
