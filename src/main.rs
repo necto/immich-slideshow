@@ -1,5 +1,5 @@
 use actix_files::NamedFile;
-use actix_web::{get, App, HttpServer, Result};
+use actix_web::{get, App, HttpServer, Result, HttpResponse, http::header};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -9,7 +9,7 @@ struct AppState {
 }
 
 #[get("/image")]
-async fn get_image(data: actix_web::web::Data<AppState>) -> Result<NamedFile> {
+async fn get_image(data: actix_web::web::Data<AppState>) -> Result<HttpResponse> {
     // Increment counter and get current value
     let count = data.counter.fetch_add(1, Ordering::SeqCst);
     
@@ -24,7 +24,21 @@ async fn get_image(data: actix_web::web::Data<AppState>) -> Result<NamedFile> {
     // Choose image based on odd/even count
     let path: PathBuf = data.paths[count].clone().into();
     
-    Ok(NamedFile::open(path)?)
+    // Open the file
+    let file = NamedFile::open(path)?;
+    
+    // Create a response with no-cache headers
+    let response = file
+        .into_response(&actix_web::HttpRequest::default())
+        .map_into_boxed_body()
+        .into_parts()
+        .0;
+    
+    // Add cache control headers to prevent caching
+    Ok(response
+        .set_header(header::CACHE_CONTROL, "no-store, no-cache, must-revalidate, max-age=0")
+        .set_header(header::PRAGMA, "no-cache")
+        .set_header(header::EXPIRES, "0"))
 }
 
 #[actix_web::main]
