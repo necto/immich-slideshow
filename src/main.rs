@@ -5,19 +5,20 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 struct AppState {
     counter: AtomicUsize,
+    paths: Vec<String>,
 }
 
 #[get("/image")]
 async fn get_image(data: actix_web::web::Data<AppState>) -> Result<NamedFile> {
     // Increment counter and check if it's odd or even
     let count = data.counter.fetch_add(1, Ordering::SeqCst);
+    if count == data.paths.len() - 1 {
+        *data.counter.get_mut() = 0;
+    }
+    assert!(count < data.paths.len());
     
     // Choose image based on odd/even count
-    let path: PathBuf = if count % 2 == 0 {
-        "static/sample.png".into()
-    } else {
-        "static/sample-flipped.png".into()
-    };
+    let path: PathBuf = data.paths[count].clone().into();
     
     Ok(NamedFile::open(path)?)
 }
@@ -31,6 +32,7 @@ async fn main() -> std::io::Result<()> {
     // Create and share application state
     let app_state = actix_web::web::Data::new(AppState {
         counter: AtomicUsize::new(0),
+        paths: vec!["static/sample.png".into(), "static/sample-flipped.png".into()]
     });
     
     HttpServer::new(move || {
