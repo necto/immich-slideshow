@@ -28,17 +28,16 @@ async fn get_image(data: actix_web::web::Data<AppState>, req: HttpRequest) -> Re
     if entries.is_empty() {
         return Err(actix_web::error::ErrorInternalServerError("No files found in static directory"));
     }
-    
-    // Increment counter and get current value
-    let count = data.counter.fetch_add(1, Ordering::SeqCst) % entries.len();
-    
-    // Reset counter if we've reached the end of the paths
-    if count == entries.len() - 1 {
+
+    let counter = data.counter.fetch_add(1, Ordering::SeqCst);
+    if entries.len() - 1 <= counter {
         data.counter.store(0, Ordering::SeqCst);
     }
-    
+    // Increment counter and get current value
+    let index = counter % entries.len();
+
     // Choose image based on count
-    let path: PathBuf = entries[count].clone().into();
+    let path: PathBuf = entries[index].clone().into();
     
     // Open the file
     let file = NamedFile::open(path)?;
