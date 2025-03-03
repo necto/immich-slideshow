@@ -8,10 +8,12 @@ struct AppState {
     counter: AtomicUsize,
 }
 
+const IMAGE_DIR : &str = "images";
+
 #[get("/image")]
 async fn get_image(data: actix_web::web::Data<AppState>, req: HttpRequest) -> Result<HttpResponse> {
     // Get all files in the static directory
-    let entries = fs::read_dir("static")
+    let entries = fs::read_dir(IMAGE_DIR)
         .map_err(|e| actix_web::error::ErrorInternalServerError(e))?
         .filter_map(|entry| {
             entry.ok().and_then(|e| {
@@ -62,9 +64,9 @@ async fn get_image(data: actix_web::web::Data<AppState>, req: HttpRequest) -> Re
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    println!("Starting server at http://127.0.0.1:8080");
-    println!("Access the image at http://127.0.0.1:8080/image");
-    println!("The server will cycle through all images in the static directory");
+    println!("Starting server at http://0.0.0.0:8080");
+    println!("Access the image at http://0.0.0.0:8080/image");
+    println!("The server will cycle through all images in the {} directory", IMAGE_DIR);
     
     // Create and share application state
     let app_state = actix_web::web::Data::new(AppState {
