@@ -1,5 +1,5 @@
 use actix_files::NamedFile;
-use actix_web::{get, App, HttpServer, Result, HttpResponse, http::header};
+use actix_web::{get, App, HttpServer, Result, HttpRequest, HttpResponse, http::header};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -9,7 +9,7 @@ struct AppState {
 }
 
 #[get("/image")]
-async fn get_image(data: actix_web::web::Data<AppState>) -> Result<HttpResponse> {
+async fn get_image(data: actix_web::web::Data<AppState>, req: HttpRequest) -> Result<HttpResponse> {
     // Increment counter and get current value
     let count = data.counter.fetch_add(1, Ordering::SeqCst);
     
@@ -26,19 +26,23 @@ async fn get_image(data: actix_web::web::Data<AppState>) -> Result<HttpResponse>
     
     // Open the file
     let file = NamedFile::open(path)?;
-    
-    // Create a response with no-cache headers
-    let response = file
-        .into_response(&actix_web::HttpRequest::default())
-        .map_into_boxed_body()
-        .into_parts()
-        .0;
-    
-    // Add cache control headers to prevent caching
-    Ok(response
-        .set_header(header::CACHE_CONTROL, "no-store, no-cache, must-revalidate, max-age=0")
-        .set_header(header::PRAGMA, "no-cache")
-        .set_header(header::EXPIRES, "0"))
+
+    let mut response = file.into_response(&req);
+
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        header::HeaderValue::from_static("no-store, no-cache, must-revalidate, max-age=0"),
+    );
+    response.headers_mut().insert(
+        header::PRAGMA,
+        header::HeaderValue::from_static("no-cache"),
+    );
+    response.headers_mut().insert(
+        header::EXPIRES,
+        header::HeaderValue::from_static("0"),
+    );
+
+    Ok(response)
 }
 
 #[actix_web::main]
