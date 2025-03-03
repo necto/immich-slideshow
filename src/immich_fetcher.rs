@@ -11,15 +11,15 @@ use dotenv::dotenv;
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Immich API URL
-    #[arg(long, env = "IMMICH_URL")]
+    #[arg(long, env("IMMICH_URL"))]
     immich_url: String,
 
     /// Immich API key
-    #[arg(long, env = "IMMICH_API_KEY")]
+    #[arg(long, env("IMMICH_API_KEY"))]
     api_key: String,
 
     /// Album ID to fetch images from
-    #[arg(long, env = "IMMICH_ALBUM_ID")]
+    #[arg(long, env("IMMICH_ALBUM_ID"))]
     album_id: String,
 
     /// Directory to save images to
