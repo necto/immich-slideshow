@@ -2,27 +2,43 @@ use actix_files::NamedFile;
 use actix_web::{get, App, HttpServer, Result, HttpRequest, HttpResponse, http::header};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::fs;
 
 struct AppState {
     counter: AtomicUsize,
-    paths: Vec<String>,
 }
 
 #[get("/image")]
 async fn get_image(data: actix_web::web::Data<AppState>, req: HttpRequest) -> Result<HttpResponse> {
+    // Get all files in the static directory
+    let entries = fs::read_dir("static")
+        .map_err(|e| actix_web::error::ErrorInternalServerError(e))?
+        .filter_map(|entry| {
+            entry.ok().and_then(|e| {
+                let path = e.path();
+                if path.is_file() {
+                    Some(path.to_string_lossy().to_string())
+                } else {
+                    None
+                }
+            })
+        })
+        .collect::<Vec<String>>();
+    
+    if entries.is_empty() {
+        return Err(actix_web::error::ErrorInternalServerError("No files found in static directory"));
+    }
+    
     // Increment counter and get current value
-    let count = data.counter.fetch_add(1, Ordering::SeqCst);
+    let count = data.counter.fetch_add(1, Ordering::SeqCst) % entries.len();
     
     // Reset counter if we've reached the end of the paths
-    if count == data.paths.len() - 1 {
+    if count == entries.len() - 1 {
         data.counter.store(0, Ordering::SeqCst);
     }
     
-    // Ensure we're within bounds
-    assert!(count < data.paths.len());
-    
-    // Choose image based on odd/even count
-    let path: PathBuf = data.paths[count].clone().into();
+    // Choose image based on count
+    let path: PathBuf = entries[count].clone().into();
     
     // Open the file
     let file = NamedFile::open(path)?;
@@ -49,12 +65,11 @@ async fn get_image(data: actix_web::web::Data<AppState>, req: HttpRequest) -> Re
 async fn main() -> std::io::Result<()> {
     println!("Starting server at http://127.0.0.1:8080");
     println!("Access the image at http://127.0.0.1:8080/image");
-    println!("The server will alternate between sample.png and sample-flipped.png");
+    println!("The server will cycle through all images in the static directory");
     
     // Create and share application state
     let app_state = actix_web::web::Data::new(AppState {
         counter: AtomicUsize::new(0),
-        paths: vec!["static/sample.png".into(), "static/sample-flipped.png".into()]
     });
     
     HttpServer::new(move || {
