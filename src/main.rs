@@ -10,11 +10,15 @@ struct AppState {
 
 #[get("/image")]
 async fn get_image(data: actix_web::web::Data<AppState>) -> Result<NamedFile> {
-    // Increment counter and check if it's odd or even
+    // Increment counter and get current value
     let count = data.counter.fetch_add(1, Ordering::SeqCst);
+    
+    // Reset counter if we've reached the end of the paths
     if count == data.paths.len() - 1 {
-        *data.counter.get_mut() = 0;
+        data.counter.store(0, Ordering::SeqCst);
     }
+    
+    // Ensure we're within bounds
     assert!(count < data.paths.len());
     
     // Choose image based on odd/even count
