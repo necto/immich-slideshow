@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 #[get("/image")]
 async fn get_image() -> Result<NamedFile> {
-    let path: PathBuf = "static/image.jpg".into();
+    let path: PathBuf = "static/sample.png".into();
     Ok(NamedFile::open(path)?)
 }
 
