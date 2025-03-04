@@ -4,6 +4,7 @@ use reqwest::{Client, header};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 use std::time::Duration;
 use dotenv::dotenv;
 
@@ -22,7 +23,11 @@ struct Args {
     #[arg(long, env("IMMICH_ALBUM_ID"))]
     album_id: String,
 
-    /// Directory to save images to
+    /// Directory to save original images to
+    #[arg(long, default_value = "originals")]
+    originals_dir: String,
+
+    /// Directory to save converted images to
     #[arg(long, default_value = "images")]
     output_dir: String,
 
@@ -39,7 +44,12 @@ async fn main() -> Result<()> {
     // Parse command line arguments
     let args = Args::parse();
     
-    // Create output directory if it doesn't exist
+    // Create directories if they don't exist
+    if !Path::new(&args.originals_dir).exists() {
+        fs::create_dir_all(&args.originals_dir)
+            .context("Failed to create originals directory")?;
+    }
+    
     if !Path::new(&args.output_dir).exists() {
         fs::create_dir_all(&args.output_dir)
             .context("Failed to create output directory")?;
@@ -61,20 +71,31 @@ async fn main() -> Result<()> {
             break;
         }
 
-        let output_path = format!("{}/{}-{}",
-                                  args.output_dir,
+        let original_path = format!("{}/{}-{}",
+                                  args.originals_dir,
                                   asset.id,
                                   asset.original_file_name);
 
-        download_asset(&client, &args, &asset.id, &output_path).await
+        download_asset(&client, &args, &asset.id, &original_path).await
             .with_context(|| format!("Failed to download asset {}", asset.id))?;
 
-        println!("Downloaded asset {} to {}", asset.id, output_path);
+        println!("Downloaded asset {} to {}", asset.id, original_path);
+        
+        // Generate output filename (PNG)
+        let output_filename = format!("{}.png", asset.id);
+        let output_path = format!("{}/{}", args.output_dir, output_filename);
+        
+        // Convert the image to grayscale PNG
+        convert_to_grayscale(&original_path, &output_path)
+            .with_context(|| format!("Failed to convert asset {} to grayscale", asset.id))?;
+            
+        println!("Converted to grayscale: {}", output_path);
     }
 
-    println!("Successfully downloaded {} images to {}",
-        assets.len().min(args.max_images),
-        args.output_dir);
+    println!("Successfully processed {} images",
+        assets.len().min(args.max_images));
+    println!("Originals saved to: {}", args.originals_dir);
+    println!("Converted images saved to: {}", args.output_dir);
 
     Ok(())
 }
@@ -131,6 +152,31 @@ async fn download_asset(client: &Client, args: &Args, asset_id: &str, output_pat
     
     let bytes = response.bytes().await?;
     fs::write(output_path, bytes)?;
+    
+    Ok(())
+}
+/// Convert an image to grayscale PNG using ImageMagick
+fn convert_to_grayscale(input_path: &str, output_path: &str) -> Result<()> {
+    let status = Command::new("convert")
+        .arg(input_path)
+        .arg("-colorspace")
+        .arg("Gray")
+        .arg("-depth")
+        .arg("8")
+        .arg("-resize")
+        .arg("1072x1448^")
+        .arg("-gravity")
+        .arg("center")
+        .arg("-crop")
+        .arg("1072x1448+0+0")
+        .arg("+repage")
+        .arg(output_path)
+        .status()
+        .context("Failed to execute convert command. Is ImageMagick installed?")?;
+        
+    if !status.success() {
+        anyhow::bail!("Convert command failed with exit code: {}", status);
+    }
     
     Ok(())
 }
