@@ -31,7 +31,8 @@ CMD ["./immich-fetcher"]
 FROM debian:bookworm-slim AS image_transformer
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
-    imagemagick && rm -rf /var/lib/apt/lists/*
+    imagemagick \
+    inotify-tools && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY --from=builder /usr/src/app/target/release/image-transformer /app/

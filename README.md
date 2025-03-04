@@ -38,7 +38,7 @@ The service will:
 
 ## Using the Image Transformer
 
-Transform the downloaded original images to grayscale PNGs:
+The Image Transformer runs as a continuous service that watches for new files in the originals directory:
 ```
 cargo run --bin image-transformer
 ```
@@ -47,6 +47,11 @@ Or with custom parameters:
 ```
 cargo run --bin image-transformer -- --originals-dir originals --output-dir images
 ```
+
+The service will:
+1. Process all existing images in the originals directory
+2. Watch for new files and process them immediately
+3. Skip images that have already been processed
 
 ## Running the Image Server
 
