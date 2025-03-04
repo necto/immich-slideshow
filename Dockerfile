@@ -20,10 +20,20 @@ CMD ["./image-server"]
 # Image for immich-fetcher
 FROM debian:bookworm-slim AS immich_fetcher
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    imagemagick && rm -rf /var/lib/apt/lists/*
+    ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY --from=builder /usr/src/app/target/release/immich-fetcher /app/
 
 CMD ["./immich-fetcher"]
+
+# Image for image-transformer
+FROM debian:bookworm-slim AS image_transformer
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    imagemagick && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY --from=builder /usr/src/app/target/release/image-transformer /app/
+
+CMD ["./image-transformer"]
