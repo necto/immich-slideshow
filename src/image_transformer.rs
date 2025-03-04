@@ -1,8 +1,12 @@
 use anyhow::{Context, Result};
 use clap::Parser;
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::mpsc::{channel, Receiver};
+use std::thread;
+use std::time::Duration;
 use dotenv::dotenv;
 
 #[derive(Parser, Debug)]
@@ -30,6 +34,37 @@ fn main() -> Result<()> {
             .context("Failed to create output directory")?;
     }
     
+    // Create originals directory if it doesn't exist
+    if !Path::new(&args.originals_dir).exists() {
+        fs::create_dir_all(&args.originals_dir)
+            .context("Failed to create originals directory")?;
+    }
+    
+    println!("Starting continuous transformer service");
+    println!("Watching for new files in: {}", args.originals_dir);
+    println!("Converting images to: {}", args.output_dir);
+    
+    // Process existing files first
+    process_existing_files(&args)?;
+    
+    // Set up file watcher
+    let (tx, rx) = channel();
+    let mut watcher = RecommendedWatcher::new(tx, Config::default())
+        .context("Failed to create file watcher")?;
+    
+    // Start watching the originals directory
+    watcher.watch(Path::new(&args.originals_dir), RecursiveMode::NonRecursive)
+        .context("Failed to watch directory")?;
+    
+    println!("Watching for new files...");
+    
+    // Process events
+    watch_for_new_files(rx, args)?;
+    
+    Ok(())
+}
+
+fn process_existing_files(args: &Args) -> Result<()> {
     // Get list of files to process
     let entries = fs::read_dir(&args.originals_dir)
         .context("Failed to read originals directory")?;
@@ -46,31 +81,70 @@ fn main() -> Result<()> {
         })
         .collect::<Vec<PathBuf>>();
     
-    println!("Found {} files to process", files.len());
+    println!("Found {} existing files to process", files.len());
     
     // Process each file
     for file_path in &files {
-        let file_name = file_path.file_name()
-            .context("Invalid file path")?
-            .to_string_lossy();
-            
-        // Generate output filename with same name but PNG extension
-        let file_stem = Path::new(&*file_name).file_stem()
-            .context("Failed to get file stem")?
-            .to_string_lossy();
-            
-        let output_filename = format!("{}.png", file_stem);
-        let output_path = format!("{}/{}", args.output_dir, output_filename);
-        
-        // Convert the image to grayscale PNG
-        convert_to_grayscale(file_path.to_string_lossy().as_ref(), &output_path)
-            .with_context(|| format!("Failed to convert asset {} to grayscale", file_stem))?;
-            
-        println!("Converted to grayscale: {}", output_path);
+        process_file(file_path, args)?;
     }
     
-    println!("Successfully processed {} images", files.len());
-    println!("Converted images saved to: {}", args.output_dir);
+    println!("Successfully processed {} existing images", files.len());
+    
+    Ok(())
+}
+
+fn watch_for_new_files(rx: Receiver<Result<Event, notify::Error>>, args: Args) -> Result<()> {
+    // Process events from the watcher
+    loop {
+        match rx.recv() {
+            Ok(Ok(event)) => {
+                // Only process file creation or modification events
+                if let EventKind::Create(_) | EventKind::Modify(_) = event.kind {
+                    for path in event.paths {
+                        if path.is_file() {
+                            println!("New file detected: {:?}", path);
+                            match process_file(&path, &args) {
+                                Ok(_) => println!("Successfully processed new file"),
+                                Err(e) => eprintln!("Error processing file: {}", e),
+                            }
+                        }
+                    }
+                }
+            }
+            Ok(Err(e)) => eprintln!("Watch error: {:?}", e),
+            Err(e) => {
+                eprintln!("Channel error: {:?}", e);
+                // Sleep to avoid tight loop in case of errors
+                thread::sleep(Duration::from_secs(1));
+            }
+        }
+    }
+}
+
+fn process_file(file_path: &Path, args: &Args) -> Result<()> {
+    let file_name = file_path.file_name()
+        .context("Invalid file path")?
+        .to_string_lossy();
+        
+    // Generate output filename with same name but PNG extension
+    let file_stem = Path::new(&*file_name).file_stem()
+        .context("Failed to get file stem")?
+        .to_string_lossy();
+        
+    let output_filename = format!("{}.png", file_stem);
+    let output_path = format!("{}/{}", args.output_dir, output_filename);
+    
+    // Check if output file already exists
+    if Path::new(&output_path).exists() {
+        println!("Output file already exists, skipping: {}", output_path);
+        return Ok(());
+    }
+    
+    // Convert the image to grayscale PNG
+    convert_to_grayscale(file_path.to_string_lossy().as_ref(), &output_path)
+        .with_context(|| format!("Failed to convert asset {} to grayscale", file_stem))?;
+        
+    println!("Converted to grayscale: {}", output_path);
     
     Ok(())
 }
