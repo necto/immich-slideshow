@@ -31,21 +31,6 @@ struct Args {
     max_images: usize,
 }
 
-#[derive(Debug, Deserialize)]
-struct Asset {
-    id: String,
-    #[serde(rename = "originalPath")]
-    original_path: String,
-}
-
-#[derive(Debug, Serialize)]
-struct AlbumAssetsRequest {
-    #[serde(rename = "albumId")]
-    album_id: String,
-    skip: usize,
-    take: usize,
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     // Load environment variables from .env file if present
@@ -64,50 +49,58 @@ async fn main() -> Result<()> {
     let client = Client::builder()
         .timeout(Duration::from_secs(30))
         .build()?;
-    
+
+    println!("Args: {:?}", args);
     // Fetch assets from album
-    let assets = fetch_album_assets(&client, &args).await?;
+    let assets = fetch_album_asset_list(&client, &args).await?;
     println!("Found {} assets in album", assets.len());
-    
+
     // Download assets
     for (i, asset) in assets.iter().enumerate() {
         if i >= args.max_images {
             break;
         }
-        
-        let extension = Path::new(&asset.original_path)
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .unwrap_or("jpg");
-            
-        let output_path = format!("{}/{}.{}", args.output_dir, asset.id, extension);
-        
+
+        let output_path = format!("{}/{}-{}",
+                                  args.output_dir,
+                                  asset.id,
+                                  asset.original_file_name);
+
         download_asset(&client, &args, &asset.id, &output_path).await
             .with_context(|| format!("Failed to download asset {}", asset.id))?;
-            
+
         println!("Downloaded asset {} to {}", asset.id, output_path);
     }
-    
-    println!("Successfully downloaded {} images to {}", 
-        assets.len().min(args.max_images), 
+
+    println!("Successfully downloaded {} images to {}",
+        assets.len().min(args.max_images),
         args.output_dir);
-    
+
     Ok(())
 }
 
-async fn fetch_album_assets(client: &Client, args: &Args) -> Result<Vec<Asset>> {
-    let url = format!("{}/api/album/assets", args.immich_url);
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AlbumResponse {
+    pub assets: Vec<Asset>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Asset {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub asset_type: String,
+    pub checksum: String,
+    #[serde(rename = "originalFileName")]
+    pub original_file_name: String,
+}
+
+async fn fetch_album_asset_list(client: &Client, args: &Args) -> Result<Vec<Asset>> {
+    let url = format!("{}/api/albums/{}?withoutAssets=false",
+                      args.immich_url, args.album_id);
     
-    let request_body = AlbumAssetsRequest {
-        album_id: args.album_id.clone(),
-        skip: 0,
-        take: args.max_images,
-    };
-    
-    let response = client.post(url)
+    let response = client.get(url)
         .header(header::ACCEPT, "application/json")
         .header("x-api-key", &args.api_key)
-        .json(&request_body)
         .send()
         .await?;
         
@@ -116,15 +109,16 @@ async fn fetch_album_assets(client: &Client, args: &Args) -> Result<Vec<Asset>> 
         let text = response.text().await?;
         anyhow::bail!("Failed to fetch album assets: HTTP {}: {}", status, text);
     }
-    
-    let assets: Vec<Asset> = response.json().await?;
-    Ok(assets)
+
+    let resp: AlbumResponse = response.json().await?;
+    Ok(resp.assets)
 }
 
 async fn download_asset(client: &Client, args: &Args, asset_id: &str, output_path: &str) -> Result<()> {
-    let url = format!("{}/api/asset/file/{}", args.immich_url, asset_id);
+    let url = format!("{}/api/assets/{}/original", args.immich_url, asset_id);
     
     let response = client.get(url)
+        .header(header::ACCEPT, "application/octet-stream")
         .header("x-api-key", &args.api_key)
         .send()
         .await?;
