@@ -6,6 +6,16 @@ services:
       context: .
       target: immich_fetcher
     volumes:
-      - ./images:/app/images
+      - ./originals:/app/originals
     env_file:
       - .env
+
+  image-transformer:
+    build:
+      context: .
+      target: image_transformer
+    volumes:
+      - ./originals:/app/originals
+      - ./images:/app/images
+    depends_on:
+      - immich-fetcher
