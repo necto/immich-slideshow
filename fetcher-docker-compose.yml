@@ -4,6 +4,6 @@ services:
   immich-fetcher:
     build: .
     volumes:
-      - ./static:/app/static
+      - ./images:/app/images
     env_file:
       - .env
