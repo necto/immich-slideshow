@@ -4,7 +4,7 @@ services:
   immich-fetcher:
     build:
       context: .
-      target: immich_fetcher
+      dockerfile: Dockerfile.immich-fetcher
     volumes:
       - ./originals:/app/originals
     env_file:
@@ -14,7 +14,7 @@ services:
   image-transformer:
     build:
       context: .
-      target: image_transformer
+      dockerfile: Dockerfile.image-transformer
     volumes:
       - ./originals:/app/originals
       - ./images:/app/images
@@ -25,7 +25,7 @@ services:
   image-server:
     build:
       context: .
-      target: image_server
+      dockerfile: Dockerfile.image-server
     ports:
       - "8080:8080"
     volumes:
