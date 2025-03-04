@@ -1,6 +1,27 @@
 version: '3'
 
 services:
+  immich-fetcher:
+    build:
+      context: .
+      target: immich_fetcher
+    volumes:
+      - ./originals:/app/originals
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  image-transformer:
+    build:
+      context: .
+      target: image_transformer
+    volumes:
+      - ./originals:/app/originals
+      - ./images:/app/images
+    depends_on:
+      - immich-fetcher
+    restart: unless-stopped
+
   image-server:
     build:
       context: .
@@ -9,3 +30,6 @@ services:
       - "8080:8080"
     volumes:
       - ./images:/app/images
+    depends_on:
+      - image-transformer
+    restart: unless-stopped
