@@ -15,10 +15,6 @@ struct Args {
     /// Directory to save converted images to
     #[arg(long, default_value = "images")]
     output_dir: String,
-
-    /// Process specific files (if empty, process all files in originals_dir)
-    #[arg(long)]
-    files: Vec<String>,
 }
 
 fn main() -> Result<()> {
@@ -35,34 +31,20 @@ fn main() -> Result<()> {
     }
     
     // Get list of files to process
-    let files = if args.files.is_empty() {
-        // Process all files in originals_dir
-        let entries = fs::read_dir(&args.originals_dir)
-            .context("Failed to read originals directory")?;
-            
-        entries
-            .filter_map(|entry| {
-                let entry = entry.ok()?;
-                let path = entry.path();
-                if path.is_file() {
-                    Some(path)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<PathBuf>>()
-    } else {
-        // Process only specified files
-        args.files.iter()
-            .map(|file| {
-                if Path::new(file).is_absolute() {
-                    PathBuf::from(file)
-                } else {
-                    PathBuf::from(&args.originals_dir).join(file)
-                }
-            })
-            .collect()
-    };
+    let entries = fs::read_dir(&args.originals_dir)
+        .context("Failed to read originals directory")?;
+        
+    let files = entries
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            if path.is_file() {
+                Some(path)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<PathBuf>>();
     
     println!("Found {} files to process", files.len());
     
@@ -72,12 +54,12 @@ fn main() -> Result<()> {
             .context("Invalid file path")?
             .to_string_lossy();
             
-        // Extract asset ID from filename (assuming format: ID-filename.ext)
-        let asset_id = file_name.split('-').next()
-            .context("Failed to extract asset ID from filename")?;
+        // Generate output filename with same name but PNG extension
+        let file_stem = Path::new(&*file_name).file_stem()
+            .context("Failed to get file stem")?
+            .to_string_lossy();
             
-        // Generate output filename (PNG)
-        let output_filename = format!("{}.png", asset_id);
+        let output_filename = format!("{}.png", file_stem);
         let output_path = format!("{}/{}", args.output_dir, output_filename);
         
         // Convert the image to grayscale PNG
