@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
+use std::thread;
 use dotenv::dotenv;
 
 #[derive(Parser, Debug)]
@@ -50,12 +51,30 @@ async fn main() -> Result<()> {
         .timeout(Duration::from_secs(30))
         .build()?;
 
+    println!("Starting continuous fetcher service");
     println!("Args: {:?}", args);
+    println!("Will check for new images every minute");
+    
+    // Run continuously
+    loop {
+        match fetch_and_download_images(&client, &args).await {
+            Ok(_) => println!("Fetch cycle completed successfully"),
+            Err(e) => eprintln!("Error during fetch cycle: {}", e),
+        }
+        
+        // Wait for 1 minute before the next fetch
+        println!("Waiting 60 seconds before next fetch...");
+        thread::sleep(Duration::from_secs(60));
+    }
+}
+
+async fn fetch_and_download_images(client: &Client, args: &Args) -> Result<()> {
     // Fetch assets from album
-    let assets = fetch_album_asset_list(&client, &args).await?;
+    let assets = fetch_album_asset_list(client, args).await?;
     println!("Found {} assets in album", assets.len());
 
     // Download assets
+    let mut downloaded_count = 0;
     for (i, asset) in assets.iter().enumerate() {
         if i >= args.max_images {
             break;
@@ -65,15 +84,25 @@ async fn main() -> Result<()> {
                                   args.originals_dir,
                                   asset.id,
                                   asset.original_file_name);
+        
+        // Skip if file already exists
+        if Path::new(&original_path).exists() {
+            println!("Asset {} already exists, skipping", asset.id);
+            continue;
+        }
 
-        download_asset(&client, &args, &asset.id, &original_path).await
+        download_asset(client, args, &asset.id, &original_path).await
             .with_context(|| format!("Failed to download asset {}", asset.id))?;
 
         println!("Downloaded asset {} to {}", asset.id, original_path);
+        downloaded_count += 1;
     }
 
-    println!("Successfully downloaded {} images",
-        assets.len().min(args.max_images));
+    if downloaded_count > 0 {
+        println!("Successfully downloaded {} new images", downloaded_count);
+    } else {
+        println!("No new images to download");
+    }
     println!("Originals saved to: {}", args.originals_dir);
 
     Ok(())
