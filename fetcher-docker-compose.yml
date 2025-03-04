@@ -2,7 +2,9 @@ version: '3'
 
 services:
   immich-fetcher:
-    build: .
+    build:
+      context: .
+      target: immich_fetcher
     volumes:
       - ./images:/app/images
     env_file:
