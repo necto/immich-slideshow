@@ -43,11 +43,6 @@ Or with custom parameters:
 cargo run --bin image-transformer -- --originals-dir originals --output-dir images
 ```
 
-You can also transform specific files:
-```
-cargo run --bin image-transformer -- --files "file1.jpg" "file2.jpg"
-```
-
 ## Running the Image Server
 
 After fetching and transforming images, run the image server:
