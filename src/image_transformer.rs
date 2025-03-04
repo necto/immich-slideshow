@@ -49,7 +49,7 @@ fn main() -> Result<()> {
     println!("Found {} files to process", files.len());
     
     // Process each file
-    for file_path in files {
+    for file_path in &files {
         let file_name = file_path.file_name()
             .context("Invalid file path")?
             .to_string_lossy();
@@ -64,7 +64,7 @@ fn main() -> Result<()> {
         
         // Convert the image to grayscale PNG
         convert_to_grayscale(file_path.to_string_lossy().as_ref(), &output_path)
-            .with_context(|| format!("Failed to convert asset {} to grayscale", asset_id))?;
+            .with_context(|| format!("Failed to convert asset {} to grayscale", file_stem))?;
             
         println!("Converted to grayscale: {}", output_path);
     }
