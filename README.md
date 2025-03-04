@@ -21,7 +21,7 @@ cargo build --release
 
 ## Using the Immich Fetcher
 
-Fetch original images from your Immich album:
+The Immich Fetcher runs as a continuous service that checks for new images every minute:
 ```
 cargo run --bin immich-fetcher
 ```
@@ -30,6 +30,11 @@ Or with custom parameters:
 ```
 cargo run --bin immich-fetcher -- --immich-url http://your-immich-server:2283 --api-key your_api_key --album-id your_album_id --originals-dir originals --max-images 50
 ```
+
+The service will:
+1. Download all images from the specified album
+2. Check for new images every minute
+3. Skip images that have already been downloaded
 
 ## Using the Image Transformer
 
