@@ -40,6 +40,7 @@ async fn get_image(data: actix_web::web::Data<AppState>, req: HttpRequest) -> Re
 
     // Choose image based on count
     let path: PathBuf = entries[index].clone().into();
+    println!("Serving image: {}", path.display());
     
     // Open the file
     let file = NamedFile::open(path)?;
