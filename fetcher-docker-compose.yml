@@ -1,0 +1,8 @@
+version: '3'
+
+services:
+  immich-fetcher:
+    build: .
+    volumes:
+      - ./static:/app/static
+      - ./.env:/app/.env
