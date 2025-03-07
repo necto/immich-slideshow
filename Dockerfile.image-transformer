@@ -5,15 +5,30 @@ WORKDIR /usr/src/app
 COPY . .
 RUN cargo build --release --bin image-transformer
 
-# Image for image-transformer
+# Model download stage
+FROM python:3.10-slim AS model-builder
+
+WORKDIR /app
+COPY tensorflow/fetch_model.py .
+
+RUN pip install --no-cache-dir tensorflow tensorflow-hub && \
+    python fetch_model.py
+
+# Final image for image-transformer
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     imagemagick \
-    inotify-tools && rm -rf /var/lib/apt/lists/*
+    inotify-tools \
+    python3 \
+    python3-pip && \
+    pip3 install --break-system-packages --no-cache-dir pillow tensorflow-cpu && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY --from=builder /usr/src/app/target/release/image-transformer /app/
+COPY --from=model-builder /app/saved_model /app/saved_model
+COPY tensorflow/stylize.py /app/
 
 CMD ["./image-transformer"]
