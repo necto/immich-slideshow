@@ -18,6 +18,7 @@ services:
     volumes:
       - ./originals:/app/originals
       - ./images:/app/images
+      - ./style:/app/style
     depends_on:
       - immich-fetcher
     restart: unless-stopped
