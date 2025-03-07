@@ -13,9 +13,11 @@ OUTPUT_PATH="$2"
 TEMP_STYLIZED="/tmp/stylized_$(basename "$OUTPUT_PATH")"
 STYLE_IMAGE="${STYLE_IMAGE:-/app/style/style.jpg}"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 if [ -f "$STYLE_IMAGE" ]; then
     echo "Applying style transfer using style image: $STYLE_IMAGE"
-    python3 /app/stylize.py "$INPUT_PATH" "$STYLE_IMAGE" "$TEMP_STYLIZED"
+    python3 "$SCRIPT_DIR/stylize.py" "$INPUT_PATH" "$STYLE_IMAGE" "$TEMP_STYLIZED"
 else
     echo "Style image not found at $STYLE_IMAGE. Using grayscale image only."
     mv "$INPUT_PATH" "$TEMP_STYLIZED"

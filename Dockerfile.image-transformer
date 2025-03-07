@@ -9,7 +9,7 @@ RUN cargo build --release --bin image-transformer
 FROM python:3.10-slim AS model-builder
 
 WORKDIR /app
-COPY tensorflow/fetch_model.py .
+COPY conversion/fetch_model.py .
 
 RUN pip install --no-cache-dir tensorflow tensorflow-hub && \
     python fetch_model.py
@@ -29,11 +29,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY --from=builder /usr/src/app/target/release/image-transformer /app/
 COPY --from=model-builder /app/saved_model /app/saved_model
-COPY tensorflow/stylize.py /app/
-COPY scripts/convert_image.sh /app/scripts/
+COPY conversion/stylize.py /app/
+COPY conversion/convert_image.sh /app/
 
 # Make the script executable and create style directory
-RUN mkdir -p /app/scripts /app/style && chmod +x /app/scripts/convert_image.sh
+RUN mkdir -p /app/style && chmod +x /app/convert_image.sh
 
 # Set environment variable for style image path
 ENV STYLE_IMAGE=/app/style/style.jpg
