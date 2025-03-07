@@ -149,27 +149,17 @@ fn process_file(file_path: &Path, args: &Args) -> Result<()> {
     Ok(())
 }
 
-/// Convert an image to grayscale PNG using ImageMagick
+/// Convert an image to grayscale PNG using a bash script that invokes ImageMagick
 fn convert_to_grayscale(input_path: &str, output_path: &str) -> Result<()> {
-    let status = Command::new("convert")
+    let status = Command::new("bash")
+        .arg("scripts/convert_image.sh")
         .arg(input_path)
-        .arg("-colorspace")
-        .arg("Gray")
-        .arg("-depth")
-        .arg("8")
-        .arg("-resize")
-        .arg("1072x1448^")
-        .arg("-gravity")
-        .arg("center")
-        .arg("-crop")
-        .arg("1072x1448+0+0")
-        .arg("+repage")
         .arg(output_path)
         .status()
-        .context("Failed to execute convert command. Is ImageMagick installed?")?;
+        .context("Failed to execute conversion script. Is the script available and executable?")?;
         
     if !status.success() {
-        anyhow::bail!("Convert command failed with exit code: {}", status);
+        anyhow::bail!("Conversion script failed with exit code: {}", status);
     }
     
     Ok(())
