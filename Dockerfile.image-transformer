@@ -32,7 +32,10 @@ COPY --from=model-builder /app/saved_model /app/saved_model
 COPY tensorflow/stylize.py /app/
 COPY scripts/convert_image.sh /app/scripts/
 
-# Make the script executable
-RUN mkdir -p /app/scripts && chmod +x /app/scripts/convert_image.sh
+# Make the script executable and create style directory
+RUN mkdir -p /app/scripts /app/style && chmod +x /app/scripts/convert_image.sh
+
+# Set environment variable for style image path
+ENV STYLE_IMAGE=/app/style/style.jpg
 
 CMD ["./image-transformer"]
