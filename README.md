@@ -1,25 +1,65 @@
-# Image Server with Immich Integration
+# Image Server with Immich Integration and Style Transfer
 
-This project contains three binaries:
-1. `image-server` - A simple web server that serves images from a directory
-2. `immich-fetcher` - A tool to fetch original images from an Immich album
-3. `image-transformer` - A tool to transform original images to grayscale PNGs
+This project provides an end-to-end solution for fetching images from Immich, applying style transfer and transformations, and serving them via a web interface. It consists of three main components:
+
+1. `immich-fetcher` - Fetches original images from an Immich album
+2. `image-transformer` - Transforms images using neural style transfer and converts them to grayscale
+3. `image-server` - A web server that serves the processed images
+
+## Features
+
+- Automatic fetching of images from Immich albums
+- Neural style transfer using TensorFlow
+- Grayscale conversion and image resizing
+- Real-time processing of new images
+- Simple web interface to view processed images
 
 ## Setup
+
+### Option 1: Using Docker Compose (Recommended)
 
 1. Create a `.env` file with your Immich configuration:
 ```
 IMMICH_URL=http://your-immich-server:2283
 IMMICH_API_KEY=your_api_key_here
 IMMICH_ALBUM_ID=your_album_id_here
+MAX_IMAGES=50
 ```
+
+2. Add a style image:
+```
+mkdir -p style
+# Copy your desired style image to style/style.jpg
+```
+
+3. Create necessary directories:
+```
+mkdir -p originals images
+```
+
+4. Start all services:
+```
+docker-compose up -d
+```
+
+### Option 2: Building and Running Manually
+
+1. Create the same `.env` file as above
 
 2. Build the project:
 ```
 cargo build --release
 ```
 
-## Using the Immich Fetcher
+3. Create necessary directories:
+```
+mkdir -p originals images style
+# Copy your desired style image to style/style.jpg
+```
+
+## Component Details
+
+### Immich Fetcher
 
 The Immich Fetcher runs as a continuous service that checks for new images every minute:
 ```
@@ -32,13 +72,13 @@ cargo run --bin immich-fetcher -- --immich-url http://your-immich-server:2283 --
 ```
 
 The service will:
-1. Download all images from the specified album
-2. Check for new images every minute
-3. Skip images that have already been downloaded
+- Download all images from the specified album
+- Check for new images every minute
+- Skip images that have already been downloaded
 
-## Using the Image Transformer
+### Image Transformer
 
-The Image Transformer runs as a continuous service that watches for new files in the originals directory:
+The Image Transformer applies neural style transfer and converts images to grayscale:
 ```
 cargo run --bin image-transformer
 ```
@@ -49,11 +89,13 @@ cargo run --bin image-transformer -- --originals-dir originals --output-dir imag
 ```
 
 The service will:
-1. Process all existing images in the originals directory
-2. Watch for new files and process them immediately
-3. Skip images that have already been processed
+- Process all existing images in the originals directory
+- Apply neural style transfer using the style image at `style/style.jpg`
+- Convert images to grayscale and resize them
+- Watch for new files and process them immediately
+- Skip images that have already been processed
 
-## Running the Image Server
+### Image Server
 
 After fetching and transforming images, run the image server:
 ```
@@ -61,3 +103,21 @@ cargo run --bin image-server
 ```
 
 Then access the images at: http://localhost:8080/image
+
+## Style Transfer
+
+The system uses TensorFlow's arbitrary image stylization model to apply artistic styles to your photos. To change the style:
+
+1. Replace the image at `style/style.jpg` with your preferred style image
+2. The system will automatically use the new style for future image processing
+
+## Troubleshooting
+
+- If images aren't being fetched, check your Immich API key and album ID
+- If style transfer isn't working, ensure the style image exists at the correct path
+- Check Docker logs for detailed error messages:
+```
+docker-compose logs immich-fetcher
+docker-compose logs image-transformer
+docker-compose logs image-server
+```
