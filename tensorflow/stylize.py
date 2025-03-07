@@ -32,9 +32,8 @@ def tensor_to_image(tensor):
     return PIL.Image.fromarray(tensor)
 
 
-def load_img(path_to_img):
+def load_img(path_to_img, max_dim):
     """Loads an image from the given path and resizes it."""
-    max_dim = 512
     img = tf.io.read_file(path_to_img)
     img = tf.image.decode_image(img, channels=3)
     img = tf.image.convert_image_dtype(img, tf.float32)
@@ -52,8 +51,8 @@ hub_model = tf.saved_model.load('/app/saved_model')
 content_path = sys.argv[1]
 style_path = sys.argv[2]
 
-content_image = load_img(content_path)
-style_image = load_img(style_path)
+content_image = load_img(content_path, max_dim=1024)
+style_image = load_img(style_path, max_dim=450) # selected empirically for the specific style image
 
 stylized_image = hub_model(tf.constant(content_image), tf.constant(style_image))[0]
 combined = tensor_to_image(stylized_image)
