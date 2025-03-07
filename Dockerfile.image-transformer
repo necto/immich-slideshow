@@ -30,5 +30,9 @@ WORKDIR /app
 COPY --from=builder /usr/src/app/target/release/image-transformer /app/
 COPY --from=model-builder /app/saved_model /app/saved_model
 COPY tensorflow/stylize.py /app/
+COPY scripts/convert_image.sh /app/scripts/
+
+# Make the script executable
+RUN mkdir -p /app/scripts && chmod +x /app/scripts/convert_image.sh
 
 CMD ["./image-transformer"]
