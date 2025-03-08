@@ -180,10 +180,11 @@ fn convert_to_grayscale(input_path: &str, output_path: &str) -> Result<()> {
 
 /// Handle a file that has been removed from the originals directory
 fn handle_removed_file(file_path: &Path, args: &Args) -> Result<()> {
+    // Factor out file_path -> output_path logic AI!
     let file_name = file_path.file_name()
         .context("Invalid file path")?
         .to_string_lossy();
-        
+
     // Generate the corresponding output filename
     let file_stem = Path::new(&*file_name).file_stem()
         .context("Failed to get file stem")?
