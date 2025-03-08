@@ -26,3 +26,7 @@ anyhow = "1.0"
 clap = { version = "4.4", features = ["derive", "env"] }
 dotenv = "0.15"
 notify = "6.1"
+
+[dev-dependencies]
+mockito = "1.2"
+tempfile = "3.8"
