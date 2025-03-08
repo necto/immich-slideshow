@@ -4,7 +4,6 @@ use reqwest::{Client, header};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
-use std::collections::HashSet; // Used in remove_deleted_assets function
 use std::time::Duration;
 use std::thread;
 use dotenv::dotenv;

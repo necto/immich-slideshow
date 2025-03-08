@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 use mockito::Server;
 use tempfile::tempdir;
-use image_server_lib::{Asset, ImmichConfig, fetch_album_asset_list, download_asset};
+use image_server_lib::{AlbumResponse, Asset, ImmichConfig, fetch_album_asset_list, download_asset};
 
 #[tokio::test]
 async fn test_download_asset() {
