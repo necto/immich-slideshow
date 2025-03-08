@@ -108,3 +108,5 @@ impl ImmichConfig for TestArgs {
         &self.album_id
     }
 }
+
+// AI! add test to check that fetch_and_download_images removes an image if it is no loger part of the album
