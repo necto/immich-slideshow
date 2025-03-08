@@ -26,7 +26,7 @@ pub trait ImmichConfig {
     fn album_id(&self) -> &str;
 }
 
-pub async fn fetch_album_asset_list<T: ImmichConfig>(client: &Client, config: &T) -> Result<Vec<Asset>> {
+async fn fetch_album_asset_list<T: ImmichConfig>(client: &Client, config: &T) -> Result<Vec<Asset>> {
     let url = format!("{}/api/albums/{}?withoutAssets=false",
                       config.immich_url(), config.album_id());
     
@@ -46,7 +46,7 @@ pub async fn fetch_album_asset_list<T: ImmichConfig>(client: &Client, config: &T
     Ok(resp.assets)
 }
 
-pub async fn download_asset<T: ImmichConfig>(client: &Client, config: &T, asset_id: &str, output_path: &str) -> Result<()> {
+async fn download_asset<T: ImmichConfig>(client: &Client, config: &T, asset_id: &str, output_path: &str) -> Result<()> {
     let url = format!("{}/api/assets/{}/original", config.immich_url(), asset_id);
     
     let response = client.get(url)

@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 use mockito::Server;
 use tempfile::tempdir;
-use image_server_lib::{AlbumResponse, Asset, ImmichConfig, fetch_album_asset_list, download_asset};
+use image_server_lib::{AlbumResponse, Asset, ImmichConfig, fetch_and_download_images};
 
 #[tokio::test]
 async fn test_download_asset() -> anyhow::Result<()> {
@@ -54,24 +54,21 @@ async fn test_download_asset() -> anyhow::Result<()> {
         immich_url: mock_server_url,
         api_key: "test-api-key".to_string(),
         album_id: album_id.to_string(),
-        originals_dir: temp_path.clone(),
-        max_images: 10,
     };
-    
-    // Fetch album assets
-    let assets = fetch_album_asset_list(&client, &args).await.expect("Failed to fetch album assets");
-    
-    // Verify we got the expected asset
-    assert_eq!(assets.len(), 1);
-    assert_eq!(assets[0].id, asset_id);
-    assert_eq!(assets[0].original_file_name, original_filename);
-    
+    let max_images = 10;
+    let originals_dir = temp_path.clone();
+
+    fetch_and_download_images(
+        &client,
+        &args,
+        &originals_dir,
+        max_images
+    ).await.expect("success");
+
     // Download the asset
     let output_path = format!("{}/{}--_--{}", temp_path, asset_id, original_filename);
-    download_asset(&client, &args, &asset_id, &output_path)
-        .await
-        .expect("Failed to download asset");
-    
+
+    println!("{:?}", output_path);
     // Verify the file was downloaded correctly
     assert!(Path::new(&output_path).exists());
     let downloaded_content = fs::read(&output_path).expect("Failed to read downloaded file");
@@ -85,8 +82,6 @@ struct TestArgs {
     immich_url: String,
     api_key: String,
     album_id: String,
-    originals_dir: String,
-    max_images: usize,
 }
 
 // Implement the ImmichConfig trait for TestArgs
