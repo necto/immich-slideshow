@@ -1,8 +1,7 @@
 use std::fs;
 use std::path::Path;
-use mockito::{mock, server_url};
+use mockito::Server;
 use tempfile::tempdir;
-use serde_json::json;
 
 // Import the Asset struct from the main code
 // We need to recreate this here since we can't directly import from the binary
@@ -28,7 +27,8 @@ async fn test_download_asset() {
     let temp_path = temp_dir.path().to_str().unwrap().to_string();
     
     // Setup mock server
-    let mock_server_url = server_url();
+    let mut server = Server::new();
+    let mock_server_url = server.url();
     
     // Mock the album endpoint
     let album_id = "test-album-id";
@@ -48,7 +48,7 @@ async fn test_download_asset() {
     };
     
     // Setup album endpoint mock
-    let _m1 = mock("GET", format!("/api/albums/{}?withoutAssets=false", album_id).as_str())
+    let album_mock = server.mock("GET", format!("/api/albums/{}?withoutAssets=false", album_id).as_str())
         .with_status(200)
         .with_header("content-type", "application/json")
         .with_body(serde_json::to_string(&album_response).unwrap())
@@ -56,7 +56,7 @@ async fn test_download_asset() {
     
     // Setup asset download endpoint mock
     let test_image_content = b"fake image data";
-    let _m2 = mock("GET", format!("/api/assets/{}/original", asset_id).as_str())
+    let asset_mock = server.mock("GET", format!("/api/assets/{}/original", asset_id).as_str())
         .with_status(200)
         .with_header("content-type", "application/octet-stream")
         .with_body(test_image_content)
