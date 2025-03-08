@@ -5,12 +5,12 @@ use std::path::Path;
 use std::fs;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct AlbumResponse {
+struct AlbumResponse {
     pub assets: Vec<Asset>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Asset {
+struct Asset {
     pub id: String,
     #[serde(rename = "type")]
     pub asset_type: String,

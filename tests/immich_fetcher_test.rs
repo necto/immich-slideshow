@@ -1,7 +1,8 @@
 use std::fs;
+use serde_json::json;
 use mockito::Server;
 use tempfile::tempdir;
-use image_server_lib::{AlbumResponse, Asset, ImmichConfig, fetch_and_download_images};
+use image_server_lib::{ImmichConfig, fetch_and_download_images};
 
 #[tokio::test]
 async fn test_download_asset() -> anyhow::Result<()> {
@@ -16,25 +17,28 @@ async fn test_download_asset() -> anyhow::Result<()> {
     // Mock the album endpoint
     let album_id = "test-album-id";
     let asset_id = "test-asset-id";
-    let original_filename = "test-image.jpg";
-    
-    // Create mock album response
-    let album_response = AlbumResponse {
-        assets: vec![
-            Asset {
-                id: asset_id.to_string(),
-                asset_type: "IMAGE".to_string(),
-                checksum: "abc123".to_string(),
-                original_file_name: original_filename.to_string(),
+
+    let album_response = json!({
+        "id": &album_id,
+        "name": "Test Album",
+        "description": "This is a test album",
+        "createdAt": "2021-01-01T00:00:00Z",
+        "updatedAt": "2021-01-01T00:00:00Z",
+        "assets": [
+            {
+                "id": &asset_id,
+                "type": "IMAGE",
+                "checksum": "abc123",
+                "originalFileName": "test-image.jpg"
             }
-        ],
-    };
-    
+        ]
+    });
+
     // Setup album endpoint mock
     let _album_mock = server.mock("GET", format!("/api/albums/{}?withoutAssets=false", album_id).as_str())
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(serde_json::to_string(&album_response).unwrap())
+        .with_body(album_response.to_string())
         .create();
     
     // Setup asset download endpoint mock
