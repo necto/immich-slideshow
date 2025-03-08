@@ -7,6 +7,7 @@ use std::process::Command;
 use std::sync::mpsc::{channel, Receiver};
 use std::thread;
 use std::time::Duration;
+use std::env;
 use dotenv::dotenv;
 
 #[derive(Parser, Debug)]
@@ -19,6 +20,10 @@ struct Args {
     /// Directory to save converted images to
     #[arg(long, default_value = "images")]
     output_dir: String,
+    
+    /// Path to the conversion script
+    #[arg(long, env = "CONVERSION_SCRIPT", default_value = "convert_image.sh")]
+    conversion_script: String,
 }
 
 fn main() -> Result<()> {
@@ -159,9 +164,13 @@ fn process_file(file_path: &Path, args: &Args) -> Result<()> {
     }
     
     // Convert the image to grayscale PNG
-    convert_to_grayscale(file_path.to_string_lossy().as_ref(), &output_path)
-        .with_context(|| format!("Failed to convert asset {} to grayscale",
-                                 file_path.to_string_lossy()))?;
+    convert_to_grayscale(
+        file_path.to_string_lossy().as_ref(), 
+        &output_path,
+        &args.conversion_script
+    )
+    .with_context(|| format!("Failed to convert asset {} to grayscale",
+                             file_path.to_string_lossy()))?;
         
     println!("Converted to grayscale: {}", output_path);
     
@@ -169,13 +178,13 @@ fn process_file(file_path: &Path, args: &Args) -> Result<()> {
 }
 
 /// Convert an image to grayscale PNG using a bash script that invokes ImageMagick
-fn convert_to_grayscale(input_path: &str, output_path: &str) -> Result<()> {
+fn convert_to_grayscale(input_path: &str, output_path: &str, script_path: &str) -> Result<()> {
     let status = Command::new("bash")
-        .arg("convert_image.sh")
+        .arg(script_path)
         .arg(input_path)
         .arg(output_path)
         .status()
-        .context("Failed to execute conversion script. Is the script available and executable?")?;
+        .with_context(|| format!("Failed to execute conversion script '{}'. Is the script available and executable?", script_path))?;
         
     if !status.success() {
         anyhow::bail!("Conversion script failed with exit code: {}", status);
