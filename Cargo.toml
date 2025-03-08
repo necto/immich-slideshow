@@ -3,6 +3,10 @@ name = "image_server"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "image_server_lib"
+path = "src/lib.rs"
+
 [[bin]]
 name = "image-server"
 path = "src/main.rs"

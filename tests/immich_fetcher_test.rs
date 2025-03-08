@@ -2,23 +2,7 @@ use std::fs;
 use std::path::Path;
 use mockito::Server;
 use tempfile::tempdir;
-
-// Import the Asset struct from the main code
-// We need to recreate this here since we can't directly import from the binary
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct Asset {
-    pub id: String,
-    #[serde(rename = "type")]
-    pub asset_type: String,
-    pub checksum: String,
-    #[serde(rename = "originalFileName")]
-    pub original_file_name: String,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct AlbumResponse {
-    pub assets: Vec<Asset>,
-}
+use image_server_lib::{Asset, ImmichConfig, fetch_album_asset_list, download_asset};
 
 #[tokio::test]
 async fn test_download_asset() {
@@ -75,7 +59,7 @@ async fn test_download_asset() {
     };
     
     // Fetch album assets
-    let assets = fetch_album_asset_list(&client, &args).await.expect("Failed to fetch album assets");
+    let assets = fetch_album_asset_list(&client, &args, &args.album_id).await.expect("Failed to fetch album assets");
     
     // Verify we got the expected asset
     assert_eq!(assets.len(), 1);
@@ -103,45 +87,13 @@ struct TestArgs {
     max_images: usize,
 }
 
-// Copy of the fetch_album_asset_list function from the main code
-async fn fetch_album_asset_list(client: &reqwest::Client, args: &TestArgs) -> anyhow::Result<Vec<Asset>> {
-    let url = format!("{}/api/albums/{}?withoutAssets=false",
-                      args.immich_url, args.album_id);
-    
-    let response = client.get(url)
-        .header(reqwest::header::ACCEPT, "application/json")
-        .header("x-api-key", &args.api_key)
-        .send()
-        .await?;
-        
-    if !response.status().is_success() {
-        let status = response.status();
-        let text = response.text().await?;
-        anyhow::bail!("Failed to fetch album assets: HTTP {}: {}", status, text);
-    }
-
-    let resp: AlbumResponse = response.json().await?;
-    Ok(resp.assets)
-}
-
-// Copy of the download_asset function from the main code
-async fn download_asset(client: &reqwest::Client, args: &TestArgs, asset_id: &str, output_path: &str) -> anyhow::Result<()> {
-    let url = format!("{}/api/assets/{}/original", args.immich_url, asset_id);
-    
-    let response = client.get(url)
-        .header(reqwest::header::ACCEPT, "application/octet-stream")
-        .header("x-api-key", &args.api_key)
-        .send()
-        .await?;
-        
-    if !response.status().is_success() {
-        let status = response.status();
-        let text = response.text().await?;
-        anyhow::bail!("Failed to download asset: HTTP {}: {}", status, text);
+// Implement the ImmichConfig trait for TestArgs
+impl ImmichConfig for TestArgs {
+    fn immich_url(&self) -> &str {
+        &self.immich_url
     }
     
-    let bytes = response.bytes().await?;
-    fs::write(output_path, bytes)?;
-    
-    Ok(())
+    fn api_key(&self) -> &str {
+        &self.api_key
+    }
 }
