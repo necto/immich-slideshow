@@ -94,7 +94,7 @@ async fn fetch_and_download_images(client: &Client, args: &Args) -> Result<()> {
             break;
         }
 
-        let original_path = format!("{}/{}-{}",
+        let original_path = format!("{}/{}--_--{}",
                                   args.originals_dir,
                                   asset.id,
                                   asset.original_file_name);
@@ -193,10 +193,10 @@ fn remove_deleted_assets(originals_dir: &str, current_asset_ids: &std::collectio
             continue;
         }
         
-        // Extract asset ID from filename (format is "{asset_id}-{original_filename}")
+        // Extract asset ID from filename (format is "{asset_id}--_--{original_filename}")
         if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
-            if let Some(dash_pos) = filename.find('-') {
-                let asset_id = &filename[0..dash_pos];
+            if let Some(separator_pos) = filename.find("--_--") {
+                let asset_id = &filename[0..separator_pos];
                 
                 // If this asset is no longer in the album, remove it
                 if !current_asset_ids.contains(asset_id) {
