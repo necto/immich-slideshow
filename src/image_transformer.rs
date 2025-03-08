@@ -134,7 +134,8 @@ fn watch_for_new_files(rx: Receiver<Result<Event, notify::Error>>, args: Args) -
     }
 }
 
-fn process_file(file_path: &Path, args: &Args) -> Result<()> {
+/// Get the output path for a given input file path
+fn get_output_path(file_path: &Path, output_dir: &str) -> Result<String> {
     let file_name = file_path.file_name()
         .context("Invalid file path")?
         .to_string_lossy();
@@ -145,7 +146,11 @@ fn process_file(file_path: &Path, args: &Args) -> Result<()> {
         .to_string_lossy();
         
     let output_filename = format!("{}.png", file_stem);
-    let output_path = format!("{}/{}", args.output_dir, output_filename);
+    Ok(format!("{}/{}", output_dir, output_filename))
+}
+
+fn process_file(file_path: &Path, args: &Args) -> Result<()> {
+    let output_path = get_output_path(file_path, &args.output_dir)?;
     
     // Check if output file already exists
     if Path::new(&output_path).exists() {
@@ -180,18 +185,7 @@ fn convert_to_grayscale(input_path: &str, output_path: &str) -> Result<()> {
 
 /// Handle a file that has been removed from the originals directory
 fn handle_removed_file(file_path: &Path, args: &Args) -> Result<()> {
-    // Factor out file_path -> output_path logic AI!
-    let file_name = file_path.file_name()
-        .context("Invalid file path")?
-        .to_string_lossy();
-
-    // Generate the corresponding output filename
-    let file_stem = Path::new(&*file_name).file_stem()
-        .context("Failed to get file stem")?
-        .to_string_lossy();
-        
-    let output_filename = format!("{}.png", file_stem);
-    let output_path = format!("{}/{}", args.output_dir, output_filename);
+    let output_path = get_output_path(file_path, &args.output_dir)?;
     
     // Check if the output file exists
     if Path::new(&output_path).exists() {
