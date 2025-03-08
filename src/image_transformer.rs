@@ -7,7 +7,6 @@ use std::process::Command;
 use std::sync::mpsc::{channel, Receiver};
 use std::thread;
 use std::time::Duration;
-use std::env;
 use dotenv::dotenv;
 
 #[derive(Parser, Debug)]

@@ -59,7 +59,7 @@ async fn test_download_asset() -> anyhow::Result<()> {
     };
     
     // Fetch album assets
-    let assets = fetch_album_asset_list(&client, &args, &args.album_id).await.expect("Failed to fetch album assets");
+    let assets = fetch_album_asset_list(&client, &args).await.expect("Failed to fetch album assets");
     
     // Verify we got the expected asset
     assert_eq!(assets.len(), 1);
@@ -97,5 +97,9 @@ impl ImmichConfig for TestArgs {
     
     fn api_key(&self) -> &str {
         &self.api_key
+    }
+
+    fn album_id(&self) -> &str {
+        &self.album_id
     }
 }
