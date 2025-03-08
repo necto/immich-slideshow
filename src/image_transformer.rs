@@ -160,7 +160,8 @@ fn process_file(file_path: &Path, args: &Args) -> Result<()> {
     
     // Convert the image to grayscale PNG
     convert_to_grayscale(file_path.to_string_lossy().as_ref(), &output_path)
-        .with_context(|| format!("Failed to convert asset {} to grayscale", file_stem))?;
+        .with_context(|| format!("Failed to convert asset {} to grayscale",
+                                 file_path.to_string_lossy()))?;
         
     println!("Converted to grayscale: {}", output_path);
     
