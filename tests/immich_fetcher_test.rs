@@ -65,10 +65,10 @@ async fn test_download_asset() -> anyhow::Result<()> {
         max_images
     ).await.expect("success");
 
+    // AI! Instead of expecting a fixed path, check that the directory contains exactly one file and the file contains the test_image_content
+    //
     // Download the asset
     let output_path = format!("{}/{}--_--{}", temp_path, asset_id, original_filename);
-
-    println!("{:?}", output_path);
     // Verify the file was downloaded correctly
     assert!(Path::new(&output_path).exists());
     let downloaded_content = fs::read(&output_path).expect("Failed to read downloaded file");
