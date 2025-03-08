@@ -4,8 +4,16 @@ use mockito::Server;
 use tempfile::tempdir;
 use image_server_lib::{AlbumResponse, Asset, ImmichConfig, fetch_album_asset_list, download_asset};
 
-#[tokio::test]
-async fn test_download_asset() {
+#[test]
+fn test_download_asset() {
+    // Create a runtime for the test
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        test_download_asset_impl().await.unwrap();
+    });
+}
+
+async fn test_download_asset_impl() -> anyhow::Result<()> {
     // Create a temporary directory for test files
     let temp_dir = tempdir().expect("Failed to create temp directory");
     let temp_path = temp_dir.path().to_str().unwrap().to_string();
@@ -76,6 +84,8 @@ async fn test_download_asset() {
     assert!(Path::new(&output_path).exists());
     let downloaded_content = fs::read(&output_path).expect("Failed to read downloaded file");
     assert_eq!(downloaded_content, test_image_content);
+    
+    Ok(())
 }
 
 // Helper struct to mimic the Args struct from the main code
