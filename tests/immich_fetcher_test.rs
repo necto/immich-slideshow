@@ -1,5 +1,4 @@
 use std::fs;
-use std::path::Path;
 use mockito::Server;
 use tempfile::tempdir;
 use image_server_lib::{AlbumResponse, Asset, ImmichConfig, fetch_and_download_images};
@@ -65,13 +64,20 @@ async fn test_download_asset() -> anyhow::Result<()> {
         max_images
     ).await.expect("success");
 
-    // AI! Instead of expecting a fixed path, check that the directory contains exactly one file and the file contains the test_image_content
-    //
-    // Download the asset
-    let output_path = format!("{}/{}--_--{}", temp_path, asset_id, original_filename);
+    // Check that the directory contains exactly one file
+    let entries = fs::read_dir(&temp_path)
+        .expect("Failed to read temp directory")
+        .collect::<Result<Vec<_>, _>>()
+        .expect("Failed to collect directory entries");
+    
+    assert_eq!(entries.len(), 1, "Directory should contain exactly one file");
+    
+    // Get the file path
+    let file_path = entries[0].path();
+    
     // Verify the file was downloaded correctly
-    assert!(Path::new(&output_path).exists());
-    let downloaded_content = fs::read(&output_path).expect("Failed to read downloaded file");
+    assert!(file_path.exists());
+    let downloaded_content = fs::read(&file_path).expect("Failed to read downloaded file");
     assert_eq!(downloaded_content, test_image_content);
     
     Ok(())
