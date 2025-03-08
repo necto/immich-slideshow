@@ -93,6 +93,7 @@ fn process_existing_files(args: &Args) -> Result<()> {
     Ok(())
 }
 
+// AI! rename this function to reflect that it handles create/modify/remove events
 fn watch_for_new_files(rx: Receiver<Result<Event, notify::Error>>, args: Args) -> Result<()> {
     // Process events from the watcher
     loop {
