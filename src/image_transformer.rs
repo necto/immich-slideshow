@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher, event::RemoveKind};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -98,17 +98,30 @@ fn watch_for_new_files(rx: Receiver<Result<Event, notify::Error>>, args: Args) -
     loop {
         match rx.recv() {
             Ok(Ok(event)) => {
-                // Only process file creation or modification events
-                if let EventKind::Create(_) | EventKind::Modify(_) = event.kind {
-                    for path in event.paths {
-                        if path.is_file() {
-                            println!("New file detected: {:?}", path);
-                            match process_file(&path, &args) {
-                                Ok(_) => println!("Successfully processed new file"),
-                                Err(e) => eprintln!("Error processing file: {}", e),
+                match event.kind {
+                    // Handle file creation or modification events
+                    EventKind::Create(_) | EventKind::Modify(_) => {
+                        for path in event.paths {
+                            if path.is_file() {
+                                println!("New file detected: {:?}", path);
+                                match process_file(&path, &args) {
+                                    Ok(_) => println!("Successfully processed new file"),
+                                    Err(e) => eprintln!("Error processing file: {}", e),
+                                }
                             }
                         }
-                    }
+                    },
+                    // Handle file removal events
+                    EventKind::Remove(RemoveKind::File) => {
+                        for path in event.paths {
+                            println!("File removed: {:?}", path);
+                            match handle_removed_file(&path, &args) {
+                                Ok(_) => println!("Successfully handled removed file"),
+                                Err(e) => eprintln!("Error handling removed file: {}", e),
+                            }
+                        }
+                    },
+                    _ => {} // Ignore other event types
                 }
             }
             Ok(Err(e)) => eprintln!("Watch error: {:?}", e),
@@ -160,6 +173,32 @@ fn convert_to_grayscale(input_path: &str, output_path: &str) -> Result<()> {
         
     if !status.success() {
         anyhow::bail!("Conversion script failed with exit code: {}", status);
+    }
+    
+    Ok(())
+}
+
+/// Handle a file that has been removed from the originals directory
+fn handle_removed_file(file_path: &Path, args: &Args) -> Result<()> {
+    let file_name = file_path.file_name()
+        .context("Invalid file path")?
+        .to_string_lossy();
+        
+    // Generate the corresponding output filename
+    let file_stem = Path::new(&*file_name).file_stem()
+        .context("Failed to get file stem")?
+        .to_string_lossy();
+        
+    let output_filename = format!("{}.png", file_stem);
+    let output_path = format!("{}/{}", args.output_dir, output_filename);
+    
+    // Check if the output file exists
+    if Path::new(&output_path).exists() {
+        println!("Removing corresponding output file: {}", output_path);
+        fs::remove_file(&output_path)
+            .with_context(|| format!("Failed to remove output file: {}", output_path))?;
+    } else {
+        println!("No corresponding output file found for: {:?}", file_path);
     }
     
     Ok(())
