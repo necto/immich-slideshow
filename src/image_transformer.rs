@@ -164,7 +164,7 @@ fn process_file(file_path: &Path, args: &Args) -> Result<()> {
     }
     
     // Convert the image to grayscale PNG
-    convert_to_grayscale(
+    convert_image(
         file_path.to_string_lossy().as_ref(), 
         &output_path,
         &args.conversion_script
@@ -178,7 +178,7 @@ fn process_file(file_path: &Path, args: &Args) -> Result<()> {
 }
 
 /// Convert an image to grayscale PNG using a bash script that invokes ImageMagick
-fn convert_to_grayscale(input_path: &str, output_path: &str, script_path: &str) -> Result<()> {
+fn convert_image(input_path: &str, output_path: &str, script_path: &str) -> Result<()> {
     let status = Command::new("bash")
         .arg(script_path)
         .arg(input_path)
