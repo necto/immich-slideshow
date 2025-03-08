@@ -4,6 +4,7 @@ use reqwest::{Client, header};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+use std::collections::HashSet;
 use std::time::Duration;
 use std::thread;
 use dotenv::dotenv;
@@ -72,6 +73,19 @@ async fn fetch_and_download_images(client: &Client, args: &Args) -> Result<()> {
     // Fetch assets from album
     let assets = fetch_album_asset_list(client, args).await?;
     println!("Found {} assets in album", assets.len());
+
+    // Create a set of current asset IDs for quick lookup
+    let current_asset_ids: std::collections::HashSet<String> = assets
+        .iter()
+        .take(args.max_images)
+        .map(|asset| asset.id.clone())
+        .collect();
+
+    // Check for files to remove (files that are no longer in the album)
+    let removed_count = remove_deleted_assets(&args.originals_dir, &current_asset_ids)?;
+    if removed_count > 0 {
+        println!("Removed {} assets that are no longer in the album", removed_count);
+    }
 
     // Download assets
     let mut downloaded_count = 0;
@@ -162,4 +176,38 @@ async fn download_asset(client: &Client, args: &Args, asset_id: &str, output_pat
     fs::write(output_path, bytes)?;
     
     Ok(())
+}
+
+/// Removes files from the originals directory that are no longer in the album
+fn remove_deleted_assets(originals_dir: &str, current_asset_ids: &std::collections::HashSet<String>) -> Result<usize> {
+    let entries = fs::read_dir(originals_dir)
+        .context("Failed to read originals directory")?;
+    
+    let mut removed_count = 0;
+    
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+        
+        if !path.is_file() {
+            continue;
+        }
+        
+        // Extract asset ID from filename (format is "{asset_id}-{original_filename}")
+        if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
+            if let Some(dash_pos) = filename.find('-') {
+                let asset_id = &filename[0..dash_pos];
+                
+                // If this asset is no longer in the album, remove it
+                if !current_asset_ids.contains(asset_id) {
+                    println!("Removing asset {} as it's no longer in the album", asset_id);
+                    fs::remove_file(&path)
+                        .with_context(|| format!("Failed to remove file: {:?}", path))?;
+                    removed_count += 1;
+                }
+            }
+        }
+    }
+    
+    Ok(removed_count)
 }
