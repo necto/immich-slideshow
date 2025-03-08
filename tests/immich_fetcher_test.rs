@@ -4,22 +4,14 @@ use mockito::Server;
 use tempfile::tempdir;
 use image_server_lib::{AlbumResponse, Asset, ImmichConfig, fetch_album_asset_list, download_asset};
 
-#[test]
-fn test_download_asset() {
-    // Create a runtime for the test
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(async {
-        test_download_asset_impl().await.unwrap();
-    });
-}
-
-async fn test_download_asset_impl() -> anyhow::Result<()> {
+#[tokio::test]
+async fn test_download_asset() -> anyhow::Result<()> {
     // Create a temporary directory for test files
     let temp_dir = tempdir().expect("Failed to create temp directory");
     let temp_path = temp_dir.path().to_str().unwrap().to_string();
     
     // Setup mock server
-    let mut server = Server::new();
+    let mut server = Server::new_async().await;
     let mock_server_url = server.url();
     
     // Mock the album endpoint
@@ -40,7 +32,7 @@ async fn test_download_asset_impl() -> anyhow::Result<()> {
     };
     
     // Setup album endpoint mock
-    let album_mock = server.mock("GET", format!("/api/albums/{}?withoutAssets=false", album_id).as_str())
+    let _album_mock = server.mock("GET", format!("/api/albums/{}?withoutAssets=false", album_id).as_str())
         .with_status(200)
         .with_header("content-type", "application/json")
         .with_body(serde_json::to_string(&album_response).unwrap())
@@ -48,7 +40,7 @@ async fn test_download_asset_impl() -> anyhow::Result<()> {
     
     // Setup asset download endpoint mock
     let test_image_content = b"fake image data";
-    let asset_mock = server.mock("GET", format!("/api/assets/{}/original", asset_id).as_str())
+    let _asset_mock = server.mock("GET", format!("/api/assets/{}/original", asset_id).as_str())
         .with_status(200)
         .with_header("content-type", "application/octet-stream")
         .with_body(test_image_content)
