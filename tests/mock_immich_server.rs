@@ -69,7 +69,7 @@ pub async fn start_mock_server(
     album_id: &str,
     asset_id: &str,
     test_image_path: &str,
-    // port: u16,
+    port: Option<u16>,
 ) -> anyhow::Result<SocketAddr> {
     // Create the configuration
     let config = Arc::new(MockServerConfig {
@@ -84,7 +84,8 @@ pub async fn start_mock_server(
     }
 
     // Bind to an ephemeral port (port 0 lets the OS pick a free port)
-    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let port_str = port.map(|p| p.to_string()).unwrap_or("0".to_string());
+    let listener = TcpListener::bind(format!("0.0.0.0:{}", port_str))?;
     let server_address = listener.local_addr()?; // Get the assigned address and port
 
     // Start the server

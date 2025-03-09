@@ -102,7 +102,8 @@ async fn test_end_to_end_flow() -> Result<()> {
     let mock_server_addr = mock_immich_server::start_mock_server(
         &test_env.album_id,
         &test_env.asset_id,
-        test_env.test_image_path.to_str().unwrap()
+        test_env.test_image_path.to_str().unwrap(),
+        None
     ).await?;
 
     // Wait for the server to start.

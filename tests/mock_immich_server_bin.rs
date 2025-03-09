@@ -1,25 +1,39 @@
-use std::env;
+use clap::Parser;
 use anyhow;
 
 mod mock_immich_server;
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+pub struct Args {
+    #[arg(long)]
+    album_id: String,
+
+    #[arg(long)]
+    asset_id: String,
+
+    #[arg(long)]
+    test_image_path: String,
+
+    #[arg(long)]
+    port: Option<u16>,
+}
+
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
-    // Get configuration from environment variables
-    let album_id = env::var("ALBUM_ID").unwrap_or_else(|_| "test-album-123".to_string());
-    let asset_id = env::var("ASSET_ID").unwrap_or_else(|_| "test-asset-456".to_string());
-    let test_image_path = env::var("TEST_IMAGE_PATH").unwrap_or_else(|_| "tests/test_image.jpg".to_string());
+    let args = Args::parse();
 
     println!("Starting mock Immich server with:");
-    println!("Album ID: {}", album_id);
-    println!("Asset ID: {}", asset_id);
-    println!("Test Image: {}", test_image_path);
+    println!("Album ID: {}", args.album_id);
+    println!("Asset ID: {}", args.asset_id);
+    println!("Test Image: {}", args.test_image_path);
 
     // Start the server
     let addr = mock_immich_server::start_mock_server(
-        &album_id, 
-        &asset_id, 
-        &test_image_path
+        &args.album_id,
+        &args.asset_id,
+        &args.test_image_path,
+        args.port
     ).await?;
     
     println!("Mock server started on {}", addr);

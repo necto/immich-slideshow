@@ -1,62 +1,93 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
+ORIGINAL_BLANK_IMAGE="./tests/blank_image.png"
 # Create test directories
 TEST_ROOT="./test-data"
-mkdir -p "$TEST_ROOT/originals"
-mkdir -p "$TEST_ROOT/images"
-mkdir -p "$TEST_ROOT/style"
+IMAGE_PATH="$TEST_ROOT/sample-image.png"
+MOCK_PORT=35323
+ALBUM_ID="test-album"
+ASSET_ID="sample-image-asset"
+EXIT_CODE=0
 
-# Create test image
-cargo run --bin create-test-image
+rm -rf $TEST_ROOT
+# Create all the directories,
+# otherwise they will be created in the containers and be owned by root,
+# which will make them problematic to clean up
+mkdir -p $TEST_ROOT/images
+mkdir -p $TEST_ROOT/originals
+cp "$ORIGINAL_BLANK_IMAGE" "$IMAGE_PATH"
 
-# Copy test image to style directory
-cp tests/test_image.jpg "$TEST_ROOT/style/style.jpg"
+cargo build --bin mock-immich-server
 
-# Make sure the conversion script is executable
-chmod +x conversion/dummy_convert_image.sh
+./target/debug/mock-immich-server \
+  --album-id="$ALBUM_ID" \
+  --asset-id="$ASSET_ID" \
+  --test-image-path="$IMAGE_PATH" \
+  --port="$MOCK_PORT" &
 
-# Start the Docker test environment
-docker-compose -f docker-compose.test.yml up --build -d
+MOCK_SERVER_PID=$!
 
-echo "Waiting for services to start..."
-sleep 5
+# Wait and test periodically if the server is up
+for i in {1..10}; do
+  if curl -s -f "http://localhost:$MOCK_PORT/api/assets/$ASSET_ID/original" -o /dev/null; then
+    echo "SUCCESS: Mock Server is up"
+    break
+  else
+    echo "Mock Server is not up yet, waiting..."
+    sleep 1
+  fi
+done
 
-# Check if files were downloaded to originals
-echo "Checking if images were downloaded..."
-ORIGINALS_COUNT=$(ls -1 "$TEST_ROOT/originals" | wc -l)
-if [ "$ORIGINALS_COUNT" -eq 0 ]; then
-  echo "ERROR: No images were downloaded to the originals directory"
-  docker-compose -f docker-compose.test.yml logs immich-fetcher
-  docker-compose -f docker-compose.test.yml down
-  exit 1
-fi
+# Prebuild containers
+docker compose create --build
 
-echo "Found $ORIGINALS_COUNT files in originals directory"
+HOST_IP=$(docker network inspect bridge -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}')
 
-# Check if files were transformed
-echo "Checking if images were transformed..."
-IMAGES_COUNT=$(ls -1 "$TEST_ROOT/images" | wc -l)
-if [ "$IMAGES_COUNT" -eq 0 ]; then
-  echo "ERROR: No images were transformed in the images directory"
-  docker-compose -f docker-compose.test.yml logs image-transformer
-  docker-compose -f docker-compose.test.yml down
-  exit 1
-fi
+# optionally:
+# CONVERSION_SCRIPT=dummy_convert_image.sh
 
-echo "Found $IMAGES_COUNT files in images directory"
+IMMICH_URL="http://$HOST_IP:$MOCK_PORT" \
+  IMMICH_API_KEY="dummy-key" \
+  IMMICH_ALBUM_ID="$ALBUM_ID" \
+  ORIGINALS_DIR=$TEST_ROOT/originals \
+  CONVERTED_DIR=$TEST_ROOT/images \
+  docker compose up &
 
-# Test if the image server is responding
+COMPOSE_PID=$!
+
+echo "Docker compose PID: $COMPOSE_PID"
+
+
+# Wait and test periodically if the server is up
+for i in {1..10}; do
+  if curl -s -f http://localhost:8080/image -o /dev/null; then
+    echo "SUCCESS: Server is up"
+    break
+  else
+    echo "Server is not up yet, waiting..."
+    sleep 1
+  fi
+done
+
+FILE="$TEST_ROOT/pic"
 echo "Testing image server..."
-if curl -s -f http://localhost:8081/image > /dev/null; then
-  echo "SUCCESS: Image server is serving images"
+if curl -s -f http://localhost:8080/image -o $FILE; then
+  echo "Image server is serving images"
+  if file --mime-type "$FILE" | grep -q "image/png"; then
+    echo "SUCCESS: $FILE is a PNG image"
+  else
+    echo "ERROR: $FILE is not a PNG image"
+  fi
 else
   echo "ERROR: Image server is not responding or returning an error"
-  docker-compose -f docker-compose.test.yml logs image-server
-  docker-compose -f docker-compose.test.yml down
-  exit 1
+  EXIT_CODE=1
 fi
 
-# Clean up
-docker-compose -f docker-compose.test.yml down
-echo "Test completed successfully!"
+kill $COMPOSE_PID
+
+kill -9 $MOCK_SERVER_PID
+
+docker compose down
+
+exit $EXIT_CODE
