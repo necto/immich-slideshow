@@ -130,32 +130,20 @@ fn process_file<T: TransformerConfig>(file_path: &Path, args: &T) -> anyhow::Res
         return Ok(());
     }
 
-    // Convert the image to grayscale PNG
-    convert_image(
-        file_path.to_string_lossy().as_ref(),
-        &output_path,
-        &args.conversion_script()
-    )
-    .with_context(|| format!("Failed to convert asset {} to grayscale",
-                             file_path.to_string_lossy()))?;
-
-    println!("Converted to grayscale: {}", output_path);
-
-    Ok(())
-}
-
-/// Convert an image to grayscale PNG using a bash script that invokes ImageMagick
-fn convert_image(input_path: &str, output_path: &str, script_path: &str) -> anyhow::Result<()> {
+    let input_path = file_path.to_string_lossy();
     let status = Command::new("bash")
-        .arg(script_path)
-        .arg(input_path)
-        .arg(output_path)
+        .arg(&args.conversion_script())
+        .arg(&*input_path)
+        .arg(&output_path)
         .status()
-        .with_context(|| format!("Failed to execute conversion script '{}'. Is the script available and executable?", script_path))?;
+        .with_context(|| format!("Failed to execute conversion script '{}'. Is the script available and executable?",
+                                 &args.conversion_script()))?;
 
     if !status.success() {
-        anyhow::bail!("Conversion script failed with exit code: {}", status);
+        anyhow::bail!("Conversion script failed for {} with exit code: {}", input_path, status);
     }
+
+    println!("Converted to grayscale: {}", output_path);
 
     Ok(())
 }
