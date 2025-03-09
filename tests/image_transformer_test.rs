@@ -86,6 +86,61 @@ fn test_process_existing_files() -> Result<()> {
 }
 
 #[test]
+fn test_run_file_watcher_removes_files() -> Result<()> {
+    // Create temporary directories for the test
+    let temp_dir = tempdir()?;
+    let originals_dir = temp_dir.path().join("originals");
+    let output_dir = temp_dir.path().join("output");
+    
+    fs::create_dir_all(&originals_dir)?;
+    fs::create_dir_all(&output_dir)?;
+    
+    // Set up arguments using the dummy conversion script
+    let args = TransformerArgs {
+        originals_dir: originals_dir.to_string_lossy().to_string(),
+        transformed_dir: output_dir.to_string_lossy().to_string(),
+        conversion_script: "conversion/dummy_convert_image.sh".to_string(),
+    };
+    
+    // Start the file watcher in a separate thread with a longer timeout
+    let originals_dir_clone = originals_dir.clone();
+    let watcher_handle = std::thread::spawn(move || {
+        run_file_watcher_with_timeout(&args, Some(2000)).unwrap(); // 2 second timeout
+    });
+    
+    // Sleep briefly to let the watcher initialize
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    
+    // Create a new test file to trigger the watcher
+    let test_file_path = originals_dir_clone.join("test_remove.jpg");
+    {
+        let mut file = File::create(&test_file_path)?;
+        write!(file, "Test image content")?;
+    }
+    
+    // Give it some time to process the creation
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    
+    // Check that the output file was created
+    let expected_output = output_dir.join("test_remove.png");
+    assert!(expected_output.exists(), "Output file was not created by watcher");
+    
+    // Remove the original file
+    fs::remove_file(&test_file_path)?;
+    
+    // Give it some time to process the deletion
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    
+    // Check that the output file was also removed
+    assert!(!expected_output.exists(), "Output file was not removed when original was deleted");
+    
+    // Wait for watcher thread to finish
+    watcher_handle.join().expect("Watcher thread panicked");
+    
+    Ok(())
+}
+
+#[test]
 fn test_run_file_watcher() -> Result<()> {
     // Create temporary directories for the test
     let temp_dir = tempdir()?;
