@@ -62,7 +62,8 @@ fn main() -> Result<()> {
     
     // Process existing files first
     process_existing_files(&args)?;
-    
+
+    // AI! factor out the following into a single function call
     // Set up file watcher
     let (tx, rx) = channel();
     let mut watcher = RecommendedWatcher::new(tx, Config::default())
