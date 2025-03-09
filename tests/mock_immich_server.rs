@@ -3,8 +3,6 @@ use std::sync::Arc;
 use hyper::{Body, Request, Response, Server, StatusCode};
 use hyper::service::{make_service_fn, service_fn};
 use std::convert::Infallible;
-use std::net::SocketAddr;
-use std::sync::Arc;
 use tokio::fs;
 use serde_json::json;
 
