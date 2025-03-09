@@ -1,5 +1,5 @@
 use actix_web::{test, App};
-use image_server_lib::{setup_app, AppState};
+use image_server_lib::server_lib::{setup_app, AppState};
 use std::collections::HashSet;
 use std::fs;
 use std::sync::atomic::AtomicUsize;

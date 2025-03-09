@@ -1,7 +1,7 @@
 use actix_web::{App, HttpServer, web};
 use clap::Parser;
 use dotenv::dotenv;
-use image_server_lib::{AppState, setup_app};
+use image_server_lib::server_lib::{AppState, setup_app};
 use std::sync::atomic::AtomicUsize;
 
 #[derive(Parser, Debug)]
