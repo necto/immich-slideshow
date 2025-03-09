@@ -3,7 +3,7 @@ use reqwest::{Client, header};
 
 // Re-export the image_transformer module for testing
 pub mod image_transformer {
-    pub use crate::image_transformer_lib::{Args, process_existing_files};
+    pub use crate::image_transformer::{Args, process_existing_files};
 }
 use serde::{Deserialize, Serialize};
 use std::path::Path;
