@@ -382,8 +382,8 @@ pub fn run_file_watcher_with_timeout<T: TransformerConfig>(
 }
 
 
+// AI!: move everything below this line to a separate module called server_lib.rs
 
-// Make this public for testing
 pub struct AppState {
     pub counter: AtomicUsize,
     pub image_dir: String,
