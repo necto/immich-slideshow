@@ -1,10 +1,11 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use std::net::TcpListener;
 use serde_json::json;
 use std::path::Path;
 use tokio::fs;
-use std::io;
+use anyhow;
 
 // Configuration for our mock server
 pub struct MockServerConfig {
@@ -27,10 +28,11 @@ async fn album_handler(data: web::Data<AppState>) -> impl Responder {
         "assets": [
             {
                 "id": data.config.asset_id,
-                "originalPath": "test_image.jpg",
+                "originalPath": "/some/path/to/test_image.jpg",
+                "originalFileName": "test_image.jpg",
                 "deviceAssetId": "test_image",
                 "ownerId": "test_user",
-                "thumbhash": "",
+                "checksum": "ABCDEFG",
                 "type": "IMAGE"
             }
         ]
@@ -67,8 +69,8 @@ pub async fn start_mock_server(
     album_id: &str,
     asset_id: &str,
     test_image_path: &str,
-    port: u16,
-) -> Result<SocketAddr, Box<dyn std::error::Error + Send + Sync>> {
+    // port: u16,
+) -> anyhow::Result<SocketAddr> {
     // Create the configuration
     let config = Arc::new(MockServerConfig {
         album_id: album_id.to_string(),
@@ -80,13 +82,13 @@ pub async fn start_mock_server(
     if !Path::new(test_image_path).exists() {
         println!("Warning: Test image file does not exist at path: {}", test_image_path);
     }
-    
-    // Build address
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    let addr_str = format!("{}:{}", addr.ip(), addr.port());
-    
+
+    // Bind to an ephemeral port (port 0 lets the OS pick a free port)
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let server_address = listener.local_addr()?; // Get the assigned address and port
+
     // Start the server
-    println!("Starting mock Immich server on http://{}", addr);
+    println!("Starting mock Immich server on http://{}", server_address);
     
     // Create the app with our handlers
     let config_clone = config.clone();
@@ -105,16 +107,11 @@ pub async fn start_mock_server(
             )
             .default_service(web::route().to(not_found))
     })
-    .bind(&addr_str)?
+    .listen(listener)?
     .run();
-    
     // Start server in the background
-    let server_handle = server.handle();
-    tokio::spawn(async move {
-        if let Err(e) = server.await {
-            eprintln!("Mock server error: {}", e);
-        }
-    });
-    
-    Ok(addr)
+    let _server_handle = server.handle();
+    actix_rt::spawn(server);
+
+    Ok(server_address)
 }

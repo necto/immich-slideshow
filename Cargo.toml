@@ -23,10 +23,6 @@ path = "src/image_transformer.rs"
 name = "mock-immich-server"
 path = "tests/mock_immich_server_bin.rs"
 
-[[bin]]
-name = "create-test-image"
-path = "tests/create_test_image.rs"
-
 [dependencies]
 actix-web = "4.4"
 actix-files = "0.6"
@@ -38,6 +34,7 @@ anyhow = "1.0"
 clap = { version = "4.4", features = ["derive", "env"] }
 dotenv = "0.15"
 notify = "6.1"
+actix-rt = "2.10.0"
 
 [dev-dependencies]
 mockito = "1.2"
