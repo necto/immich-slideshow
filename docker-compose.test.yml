@@ -1,0 +1,56 @@
+version: '3'
+
+services:
+  mock-immich-server:
+    image: rust:1.81
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: cargo run --bin mock-immich-server
+    environment:
+      - ALBUM_ID=test-album-123
+      - ASSET_ID=test-asset-456
+      - TEST_IMAGE_PATH=/app/tests/test_image.jpg
+    ports:
+      - "8000:8000"
+
+  immich-fetcher:
+    build:
+      context: .
+      dockerfile: Dockerfile.immich-fetcher
+    volumes:
+      - ./test-data/originals:/app/originals
+    environment:
+      - IMMICH_URL=http://mock-immich-server:8000
+      - IMMICH_API_KEY=test-api-key
+      - ALBUM_ID=test-album-123
+      - ORIGINALS_DIR=/app/originals
+      - MAX_IMAGES=10
+    depends_on:
+      - mock-immich-server
+
+  image-transformer:
+    build:
+      context: .
+      dockerfile: Dockerfile.image-transformer
+    volumes:
+      - ./test-data/originals:/app/originals
+      - ./test-data/images:/app/images
+      - ./test-data/style:/app/style
+    environment:
+      - CONVERSION_SCRIPT=/app/conversion/dummy_convert_image.sh
+    depends_on:
+      - immich-fetcher
+
+  image-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.image-server
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./test-data/images:/app/images
+    environment:
+      - IMAGE_DIR=/app/images
+    depends_on:
+      - image-transformer
