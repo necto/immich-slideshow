@@ -13,6 +13,8 @@ use std::time::Duration;
 use std::process::Command;
 use std::cmp::min;
 
+pub mod server_lib;
+
 #[derive(Debug, Serialize, Deserialize)]
 struct AlbumResponse {
     pub assets: Vec<Asset>,
@@ -173,6 +175,8 @@ fn remove_deleted_assets(originals_dir: &str, current_asset_ids: &std::collectio
 
     Ok(removed_count)
 }
+
+// AI! move everything below this line into a separate file image_transformer_lib.rs
 
 pub fn process_existing_files<T: TransformerConfig>(args: &T) -> anyhow::Result<()> {
     // Get list of files to process
@@ -377,6 +381,3 @@ pub fn run_file_watcher_with_timeout<T: TransformerConfig>(
 }
 
 
-// AI!: move everything below this line to a separate module called server_lib.rs
-// Re-export server components for tests
-pub mod server_lib;
