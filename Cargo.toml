@@ -43,4 +43,3 @@ notify = "6.1"
 mockito = "1.2"
 tempfile = "3.8"
 tokio-test = "0.4"
-hyper = { version = "0.14", features = ["server", "http1", "runtime"] }
