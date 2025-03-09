@@ -14,7 +14,6 @@ struct TestEnv {
     test_dir: TempDir,
     originals_dir: PathBuf,
     images_dir: PathBuf,
-    style_dir: PathBuf,
     test_image_path: PathBuf,
     immich_url: String,
     api_key: String,
@@ -41,20 +40,14 @@ async fn setup_test_environment() -> Result<TestEnv> {
     let test_dir = TempDir::new()?;
     let originals_dir = test_dir.path().join("originals");
     let images_dir = test_dir.path().join("images");
-    let style_dir = test_dir.path().join("style");
-    
+
     fs::create_dir_all(&originals_dir)?;
     fs::create_dir_all(&images_dir)?;
-    fs::create_dir_all(&style_dir)?;
-    
+
     // Create a test image file with mock data
     let test_image_path = test_dir.path().join("test_image.txt");
     fs::write(&test_image_path, "mock image data for testing purposes")?;
 
-    // Use a simple style image
-    let style_image_path = style_dir.join("style.jpg");
-    fs::copy(&test_image_path, &style_image_path)?;
-    
     // Test configuration
     let album_id = "test-album-123";
     let asset_id = "test-asset-456";
@@ -64,7 +57,6 @@ async fn setup_test_environment() -> Result<TestEnv> {
         test_dir,
         originals_dir,
         images_dir,
-        style_dir,
         test_image_path,
         immich_url: String::new(), // Will be filled after server starts
         api_key: api_key.to_string(),
