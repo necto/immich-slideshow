@@ -3,17 +3,26 @@ use actix_web::{get, App, HttpServer, Result, HttpRequest, HttpResponse, http::h
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::fs;
+use clap::Parser;
+use dotenv::dotenv;
 
 struct AppState {
     counter: AtomicUsize,
+    image_dir: String,
 }
 
-const IMAGE_DIR : &str = "images";
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Directory containing images to serve
+    #[arg(long, env = "IMAGE_DIR", default_value = "images")]
+    image_dir: String,
+}
 
 #[get("/image")]
 async fn get_image(data: actix_web::web::Data<AppState>, req: HttpRequest) -> Result<HttpResponse> {
-    // Get all files in the static directory
-    let entries = fs::read_dir(IMAGE_DIR)
+    // Get all files in the images directory
+    let entries = fs::read_dir(&data.image_dir)
         .map_err(|e| actix_web::error::ErrorInternalServerError(e))?
         .filter_map(|entry| {
             entry.ok().and_then(|e| {
@@ -65,13 +74,20 @@ async fn get_image(data: actix_web::web::Data<AppState>, req: HttpRequest) -> Re
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    // Load environment variables from .env file if present
+    dotenv().ok();
+    
+    // Parse command line arguments
+    let args = Args::parse();
+    
     println!("Starting server at http://0.0.0.0:8080");
     println!("Access the image at http://0.0.0.0:8080/image");
-    println!("The server will cycle through all images in the {} directory", IMAGE_DIR);
+    println!("The server will cycle through all images in the {} directory", args.image_dir);
     
     // Create and share application state
     let app_state = actix_web::web::Data::new(AppState {
         counter: AtomicUsize::new(0),
+        image_dir: args.image_dir,
     });
     
     HttpServer::new(move || {
