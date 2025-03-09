@@ -84,7 +84,7 @@ else
   EXIT_CODE=1
 fi
 
-kill $COMPOSE_PID
+kill $COMPOSE_PID || true
 
 kill -9 $MOCK_SERVER_PID
 

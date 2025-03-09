@@ -6,11 +6,11 @@ services:
       context: .
       dockerfile: Dockerfile.immich-fetcher
     volumes:
-      - $ORIGINALS_DIR:/app/originals
+      - ${ORIGINALS_DIR:-originals}:/app/originals
     environment:
-      - IMMICH_URL=$IMMICH_URL
-      - IMMICH_API_KEY=$IMMICH_API_KEY
-      - IMMICH_ALBUM_ID=$IMMICH_ALBUM_ID
+      - IMMICH_URL
+      - IMMICH_API_KEY
+      - IMMICH_ALBUM_ID
     restart: unless-stopped
 
   image-transformer:
@@ -18,13 +18,13 @@ services:
       context: .
       dockerfile: Dockerfile.image-transformer
     volumes:
-      - $ORIGINALS_DIR:/app/originals
-      - $CONVERTED_DIR:/app/images
+      - ${ORIGINALS_DIR:-./originals}:/app/originals
+      - ${CONVERTED_DIR:-./images}:/app/images
       - ./style:/app/style
     depends_on:
       - immich-fetcher
     environment:
-      - CONVERSION_SCRIPT=$CONVERSION_SCRIPT
+      - CONVERSION_SCRIPT=${CONVERSION_SCRIPT:-convert_image.sh}
     restart: unless-stopped
 
   image-server:
@@ -34,7 +34,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - $CONVERTED_DIR:/app/images
+      - ${CONVERTED_DIR:-./images}:/app/images
     depends_on:
       - image-transformer
     restart: unless-stopped
