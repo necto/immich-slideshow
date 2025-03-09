@@ -52,7 +52,8 @@ fn test_process_existing_files() -> Result<()> {
     
     // Run the function being tested
     process_existing_files(&args)?;
-    
+
+    // AI! change this to check that every file in the output_dir corresponds to a file in the originals_dir and it has the same number of files
     // Verify that output files were created
     for filename in &test_files {
         let base_name = Path::new(filename).file_stem().unwrap();
