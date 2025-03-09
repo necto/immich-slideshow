@@ -330,3 +330,73 @@ pub fn run_file_watcher<T: TransformerConfig + 'static>(args: &T) -> Result<()> 
 
     Ok(())
 }
+
+/// Sets up a file watcher with a timeout for testing
+pub fn run_file_watcher_with_timeout<T: TransformerConfig>(
+    args: &T,
+    timeout_ms: u64
+) -> Result<()> {
+    let (tx, rx) = channel();
+    let mut watcher = RecommendedWatcher::new(tx, Config::default())
+        .context("Failed to create file watcher")?;
+    
+    // Start watching the directory
+    watcher.watch(Path::new(args.originals_dir()), RecursiveMode::NonRecursive)
+        .context("Failed to watch directory")?;
+        
+    println!("Watching for new files with timeout of {}ms...", timeout_ms);
+
+    // Process events with timeout
+    let start_time = std::time::Instant::now();
+    
+    loop {
+        // Check if we've exceeded the timeout
+        if start_time.elapsed().as_millis() > timeout_ms as u128 {
+            println!("Timeout reached, exiting watcher");
+            break;
+        }
+        
+        // Try to receive an event, but with a short timeout to let us check the overall timeout
+        match rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(Ok(event)) => {
+                match event.kind {
+                    // Handle file creation or modification events
+                    EventKind::Create(_) | EventKind::Modify(_) => {
+                        for path in event.paths {
+                            if path.is_file() {
+                                println!("New file detected: {:?}", path);
+                                match process_file(&path, args) {
+                                    Ok(_) => println!("Successfully processed new file"),
+                                    Err(e) => eprintln!("Error processing file: {}", e),
+                                }
+                            }
+                        }
+                    },
+                    // Handle file removal events
+                    EventKind::Remove(RemoveKind::File) => {
+                        for path in event.paths {
+                            println!("File removed: {:?}", path);
+                            match handle_removed_file(&path, args) {
+                                Ok(_) => println!("Successfully handled removed file"),
+                                Err(e) => eprintln!("Error handling removed file: {}", e),
+                            }
+                        }
+                    },
+                    _ => {} // Ignore other event types
+                }
+            },
+            Ok(Err(e)) => eprintln!("Watch error: {:?}", e),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                // Just a timeout on the recv, continue the loop
+                continue;
+            },
+            Err(e) => {
+                eprintln!("Channel error: {:?}", e);
+                // Sleep to avoid tight loop in case of errors
+                thread::sleep(Duration::from_millis(100));
+            }
+        }
+    }
+    
+    Ok(())
+}
