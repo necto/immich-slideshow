@@ -1,16 +1,8 @@
-use image::{ImageBuffer, Rgb};
+use std::fs;
 
 fn main() {
-    // Create a 100x100 test image with a simple pattern
-    let test_image = ImageBuffer::from_fn(100, 100, |x, y| {
-        if (x < 50 && y < 50) || (x >= 50 && y >= 50) {
-            Rgb([255, 0, 0]) // red
-        } else {
-            Rgb([0, 0, 255]) // blue
-        }
-    });
-    
-    // Save the test image
-    test_image.save("tests/test_image.jpg").unwrap();
-    println!("Created test image at tests/test_image.jpg");
+    // Create a simple text file as mock image data
+    fs::write("tests/test_image.jpg", "mock image data for testing purposes")
+        .unwrap();
+    println!("Created mock test image at tests/test_image.jpg");
 }

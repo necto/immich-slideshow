@@ -47,9 +47,9 @@ async fn setup_test_environment() -> Result<TestEnv> {
     fs::create_dir_all(&images_dir)?;
     fs::create_dir_all(&style_dir)?;
     
-    // Create a test image (a small colored square)
+    // Create a test image file with mock data
     let test_image_path = test_dir.path().join("test_image.txt");
-    // AI! write "mock data" into the file by `test_image_path`
+    fs::write(&test_image_path, "mock image data for testing purposes")?;
 
     // Use a simple style image
     let style_image_path = style_dir.join("style.jpg");

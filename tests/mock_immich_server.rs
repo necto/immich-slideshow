@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+use std::sync::Arc;
 use hyper::{Body, Request, Response, Server, StatusCode};
 use hyper::service::{make_service_fn, service_fn};
 use std::convert::Infallible;
@@ -74,7 +76,7 @@ pub async fn start_mock_server(
     asset_id: &str,
     test_image_path: &str,
     port: u16,
-) -> Result<SocketAddr, Box<dyn std::error::Error>> {
+) -> Result<SocketAddr, Box<dyn std::error::Error + Send + Sync>> {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     
     let config = Arc::new(MockServerConfig {
