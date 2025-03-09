@@ -1,13 +1,17 @@
 use anyhow::{Context, Result};
 use reqwest::{Client, header};
 
-// Re-export the image_transformer module for testing
-pub mod image_transformer {
-    pub use crate::image_transformer::{Args, process_existing_files};
-}
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::fs;
+
+// Import from image_transformer
+use std::sync::mpsc::Receiver;
+use notify::{Event, EventKind, event::RemoveKind};
+use std::path::PathBuf;
+use std::thread;
+use std::time::Duration;
+use std::process::Command;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct AlbumResponse {
@@ -29,6 +33,12 @@ pub trait ImmichConfig {
     fn immich_url(&self) -> &str;
     fn api_key(&self) -> &str;
     fn album_id(&self) -> &str;
+}
+
+pub trait TransformerConfig {
+    fn originals_dir(&self) -> &str;
+    fn transformed_dir(&self) -> &str;
+    fn conversion_script(&self) -> &str;
 }
 
 async fn fetch_album_asset_list<T: ImmichConfig>(client: &Client, config: &T) -> Result<Vec<Asset>> {
@@ -162,4 +172,144 @@ fn remove_deleted_assets(originals_dir: &str, current_asset_ids: &std::collectio
     }
 
     Ok(removed_count)
+}
+
+pub fn process_existing_files<T: TransformerConfig>(args: &T) -> Result<()> {
+    // Get list of files to process
+    let entries = fs::read_dir(&args.originals_dir())
+        .context("Failed to read originals directory")?;
+
+    let files = entries
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            if path.is_file() {
+                Some(path)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<PathBuf>>();
+
+    println!("Found {} existing files to process", files.len());
+
+    // Process each file
+    for file_path in &files {
+        process_file(file_path, args)?;
+    }
+
+    println!("Successfully processed {} existing images", files.len());
+
+    Ok(())
+}
+
+pub fn handle_file_system_events<T: TransformerConfig>(rx: Receiver<Result<Event, notify::Error>>, args: T) -> Result<()> {
+    // Process events from the watcher
+    loop {
+        match rx.recv() {
+            Ok(Ok(event)) => {
+                match event.kind {
+                    // Handle file creation or modification events
+                    EventKind::Create(_) | EventKind::Modify(_) => {
+                        for path in event.paths {
+                            if path.is_file() {
+                                println!("New file detected: {:?}", path);
+                                match process_file(&path, &args) {
+                                    Ok(_) => println!("Successfully processed new file"),
+                                    Err(e) => eprintln!("Error processing file: {}", e),
+                                }
+                            }
+                        }
+                    },
+                    // Handle file removal events
+                    EventKind::Remove(RemoveKind::File) => {
+                        for path in event.paths {
+                            println!("File removed: {:?}", path);
+                            match handle_removed_file(&path, &args) {
+                                Ok(_) => println!("Successfully handled removed file"),
+                                Err(e) => eprintln!("Error handling removed file: {}", e),
+                            }
+                        }
+                    },
+                    _ => {} // Ignore other event types
+                }
+            }
+            Ok(Err(e)) => eprintln!("Watch error: {:?}", e),
+            Err(e) => {
+                eprintln!("Channel error: {:?}", e);
+                // Sleep to avoid tight loop in case of errors
+                thread::sleep(Duration::from_secs(1));
+            }
+        }
+    }
+}
+
+/// Get the output path for a given input file path
+fn get_output_path(file_path: &Path, output_dir: &str) -> Result<String> {
+    let file_name = file_path.file_name()
+        .context("Invalid file path")?
+        .to_string_lossy();
+
+    // Generate output filename with same name but PNG extension
+    let file_stem = Path::new(&*file_name).file_stem()
+        .context("Failed to get file stem")?
+        .to_string_lossy();
+
+    let output_filename = format!("{}.png", file_stem);
+    Ok(format!("{}/{}", output_dir, output_filename))
+}
+
+fn process_file<T: TransformerConfig>(file_path: &Path, args: &T) -> Result<()> {
+    let output_path = get_output_path(file_path, &args.transformed_dir())?;
+
+    // Check if output file already exists
+    if Path::new(&output_path).exists() {
+        println!("Output file already exists, skipping: {}", output_path);
+        return Ok(());
+    }
+
+    // Convert the image to grayscale PNG
+    convert_image(
+        file_path.to_string_lossy().as_ref(),
+        &output_path,
+        &args.conversion_script()
+    )
+    .with_context(|| format!("Failed to convert asset {} to grayscale",
+                             file_path.to_string_lossy()))?;
+
+    println!("Converted to grayscale: {}", output_path);
+
+    Ok(())
+}
+
+/// Convert an image to grayscale PNG using a bash script that invokes ImageMagick
+fn convert_image(input_path: &str, output_path: &str, script_path: &str) -> Result<()> {
+    let status = Command::new("bash")
+        .arg(script_path)
+        .arg(input_path)
+        .arg(output_path)
+        .status()
+        .with_context(|| format!("Failed to execute conversion script '{}'. Is the script available and executable?", script_path))?;
+
+    if !status.success() {
+        anyhow::bail!("Conversion script failed with exit code: {}", status);
+    }
+
+    Ok(())
+}
+
+/// Handle a file that has been removed from the originals directory
+fn handle_removed_file<T: TransformerConfig>(file_path: &Path, args: &T) -> Result<()> {
+    let output_path = get_output_path(file_path, &args.transformed_dir())?;
+
+    // Check if the output file exists
+    if Path::new(&output_path).exists() {
+        println!("Removing corresponding output file: {}", output_path);
+        fs::remove_file(&output_path)
+            .with_context(|| format!("Failed to remove output file: {}", output_path))?;
+    } else {
+        println!("No corresponding output file found for: {:?}", file_path);
+    }
+
+    Ok(())
 }

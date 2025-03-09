@@ -1,9 +1,29 @@
 use anyhow::Result;
-use image_server_lib::image_transformer::{Args, process_existing_files};
+use image_server_lib::{TransformerConfig, process_existing_files};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
 use tempfile::tempdir;
+
+struct TransformerArgs {
+    originals_dir: String,
+    transformed_dir: String,
+    conversion_script: String,
+}
+
+impl TransformerConfig for TransformerArgs {
+    fn originals_dir(&self) -> &str {
+        &self.originals_dir
+    }
+
+    fn transformed_dir(&self) -> &str {
+        &self.transformed_dir
+    }
+
+    fn conversion_script(&self) -> &str {
+        &self.conversion_script
+    }
+}
 
 #[test]
 fn test_process_existing_files() -> Result<()> {
@@ -24,9 +44,9 @@ fn test_process_existing_files() -> Result<()> {
     }
     
     // Set up arguments using the dummy conversion script
-    let args = Args {
+    let args = TransformerArgs {
         originals_dir: originals_dir.to_string_lossy().to_string(),
-        output_dir: output_dir.to_string_lossy().to_string(),
+        transformed_dir: output_dir.to_string_lossy().to_string(),
         conversion_script: "conversion/dummy_convert_image.sh".to_string(),
     };
     
