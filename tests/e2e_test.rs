@@ -48,16 +48,9 @@ async fn setup_test_environment() -> Result<TestEnv> {
     fs::create_dir_all(&style_dir)?;
     
     // Create a test image (a small colored square)
-    let test_image_path = test_dir.path().join("test_image.jpg");
-    let test_image = image::ImageBuffer::from_fn(100, 100, |x, y| {
-        if (x < 50 && y < 50) || (x >= 50 && y >= 50) {
-            image::Rgb([255, 0, 0])
-        } else {
-            image::Rgb([0, 0, 255])
-        }
-    });
-    test_image.save(&test_image_path)?;
-    
+    let test_image_path = test_dir.path().join("test_image.txt");
+    // AI! write "mock data" into the file by `test_image_path`
+
     // Use a simple style image
     let style_image_path = style_dir.join("style.jpg");
     fs::copy(&test_image_path, &style_image_path)?;
