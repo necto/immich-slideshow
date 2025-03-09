@@ -82,6 +82,9 @@ async fn download_asset<T: ImmichConfig>(client: &Client, config: &T, asset_id: 
     Ok(())
 }
 
+// Make testing functions public
+pub use crate::run_file_watcher_with_timeout;
+
 pub async fn fetch_and_download_images<T: ImmichConfig>(
     client: &Client,
     args: &T,
