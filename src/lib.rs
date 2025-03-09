@@ -203,7 +203,7 @@ pub fn process_existing_files<T: TransformerConfig>(args: &T) -> Result<()> {
     Ok(())
 }
 
-pub fn handle_file_system_events<T: TransformerConfig>(rx: Receiver<Result<Event, notify::Error>>, args: T) -> Result<()> {
+fn handle_file_system_events<T: TransformerConfig>(rx: Receiver<Result<Event, notify::Error>>, args: &T) -> Result<()> {
     // Process events from the watcher
     loop {
         match rx.recv() {
@@ -214,7 +214,7 @@ pub fn handle_file_system_events<T: TransformerConfig>(rx: Receiver<Result<Event
                         for path in event.paths {
                             if path.is_file() {
                                 println!("New file detected: {:?}", path);
-                                match process_file(&path, &args) {
+                                match process_file(&path, args) {
                                     Ok(_) => println!("Successfully processed new file"),
                                     Err(e) => eprintln!("Error processing file: {}", e),
                                 }
@@ -225,7 +225,7 @@ pub fn handle_file_system_events<T: TransformerConfig>(rx: Receiver<Result<Event
                     EventKind::Remove(RemoveKind::File) => {
                         for path in event.paths {
                             println!("File removed: {:?}", path);
-                            match handle_removed_file(&path, &args) {
+                            match handle_removed_file(&path, args) {
                                 Ok(_) => println!("Successfully handled removed file"),
                                 Err(e) => eprintln!("Error handling removed file: {}", e),
                             }
@@ -315,13 +315,13 @@ fn handle_removed_file<T: TransformerConfig>(file_path: &Path, args: &T) -> Resu
 }
 
 /// Sets up a file watcher for the specified directory
-pub fn run_file_watcher<T: TransformerConfig + 'static>(directory: &str, args: T) -> Result<()> {
+pub fn run_file_watcher<T: TransformerConfig + 'static>(args: &T) -> Result<()> {
     let (tx, rx) = channel();
     let mut watcher = RecommendedWatcher::new(tx, Config::default())
         .context("Failed to create file watcher")?;
     
     // Start watching the directory
-    watcher.watch(Path::new(directory), RecursiveMode::NonRecursive)
+    watcher.watch(Path::new(args.originals_dir()), RecursiveMode::NonRecursive)
         .context("Failed to watch directory")?;
         
     println!("Watching for new files...");

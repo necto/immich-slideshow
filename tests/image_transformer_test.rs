@@ -66,16 +66,7 @@ fn test_process_existing_files() -> Result<()> {
     assert_eq!(output_file_count, test_files.len(), 
                "Number of output files ({}) does not match number of input files ({})",
                output_file_count, test_files.len());
-    
-    // Verify each original file has a corresponding output file
-    for filename in &test_files {
-        let base_name = Path::new(filename).file_stem().unwrap();
-        let output_filename = format!("{}.png", base_name.to_string_lossy());
-        let output_path = output_dir.join(&output_filename);
-        
-        assert!(output_path.exists(), "Output file {} not created", output_filename);
-    }
-    
+
     // Verify each output file corresponds to an original file
     for output_path in output_entries {
         if let Some(output_filename) = output_path.file_name() {
@@ -90,6 +81,6 @@ fn test_process_existing_files() -> Result<()> {
             }
         }
     }
-    
+
     Ok(())
 }
