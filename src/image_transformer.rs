@@ -3,7 +3,7 @@ use clap::Parser;
 use std::fs;
 use std::path::Path;
 use dotenv::dotenv;
-use image_server_lib::{TransformerConfig, process_existing_files, run_file_watcher_with_timeout};
+use image_server_lib::image_transformer_lib::{TransformerConfig, process_existing_files, run_file_watcher_with_timeout};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]

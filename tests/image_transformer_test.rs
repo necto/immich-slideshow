@@ -1,5 +1,5 @@
 use anyhow::Result;
-use image_server_lib::{TransformerConfig, process_existing_files, run_file_watcher_with_timeout};
+use image_server_lib::image_transformer_lib::{TransformerConfig, process_existing_files, run_file_watcher_with_timeout};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;

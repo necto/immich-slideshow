@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Context;
 use notify::{Event, EventKind, event::RemoveKind, Config, RecommendedWatcher, Watcher, RecursiveMode};
 use std::cmp::min;
 use std::fs;
@@ -7,7 +7,13 @@ use std::process::Command;
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
 
-pub fn process_existing_files<T: super::TransformerConfig>(args: &T) -> anyhow::Result<()> {
+pub trait TransformerConfig {
+    fn originals_dir(&self) -> &str;
+    fn transformed_dir(&self) -> &str;
+    fn conversion_script(&self) -> &str;
+}
+
+pub fn process_existing_files<T: TransformerConfig>(args: &T) -> anyhow::Result<()> {
     // Get list of files to process
     let entries = fs::read_dir(&args.originals_dir())
         .context("Failed to read originals directory")?;
@@ -36,7 +42,7 @@ pub fn process_existing_files<T: super::TransformerConfig>(args: &T) -> anyhow::
     Ok(())
 }
 
-pub fn handle_file_system_events<T: super::TransformerConfig>(
+fn handle_file_system_events<T: TransformerConfig>(
     rx: Receiver<anyhow::Result<Event, notify::Error>>,
     args: &T,
     timeout_ms: Option<u64>
@@ -101,7 +107,7 @@ pub fn handle_file_system_events<T: super::TransformerConfig>(
 }
 
 /// Get the output path for a given input file path
-pub fn get_output_path(file_path: &Path, output_dir: &str) -> anyhow::Result<String> {
+fn get_output_path(file_path: &Path, output_dir: &str) -> anyhow::Result<String> {
     let file_name = file_path.file_name()
         .context("Invalid file path")?
         .to_string_lossy();
@@ -115,7 +121,7 @@ pub fn get_output_path(file_path: &Path, output_dir: &str) -> anyhow::Result<Str
     Ok(format!("{}/{}", output_dir, output_filename))
 }
 
-pub fn process_file<T: super::TransformerConfig>(file_path: &Path, args: &T) -> anyhow::Result<()> {
+fn process_file<T: TransformerConfig>(file_path: &Path, args: &T) -> anyhow::Result<()> {
     let output_path = get_output_path(file_path, &args.transformed_dir())?;
 
     // Check if output file already exists
@@ -139,7 +145,7 @@ pub fn process_file<T: super::TransformerConfig>(file_path: &Path, args: &T) -> 
 }
 
 /// Convert an image to grayscale PNG using a bash script that invokes ImageMagick
-pub fn convert_image(input_path: &str, output_path: &str, script_path: &str) -> anyhow::Result<()> {
+fn convert_image(input_path: &str, output_path: &str, script_path: &str) -> anyhow::Result<()> {
     let status = Command::new("bash")
         .arg(script_path)
         .arg(input_path)
@@ -155,7 +161,7 @@ pub fn convert_image(input_path: &str, output_path: &str, script_path: &str) -> 
 }
 
 /// Handle a file that has been removed from the originals directory
-pub fn handle_removed_file<T: super::TransformerConfig>(file_path: &Path, args: &T) -> anyhow::Result<()> {
+fn handle_removed_file<T: TransformerConfig>(file_path: &Path, args: &T) -> anyhow::Result<()> {
     let output_path = get_output_path(file_path, &args.transformed_dir())?;
 
     // Check if the output file exists
@@ -171,7 +177,7 @@ pub fn handle_removed_file<T: super::TransformerConfig>(file_path: &Path, args: 
 }
 
 /// Sets up a file watcher with a timeout for testing
-pub fn run_file_watcher_with_timeout<T: super::TransformerConfig>(
+pub fn run_file_watcher_with_timeout<T: TransformerConfig>(
     args: &T,
     timeout_ms: Option<u64>
 ) -> anyhow::Result<()> {

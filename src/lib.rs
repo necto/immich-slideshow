@@ -1,17 +1,9 @@
-use anyhow::{Context};
-use reqwest::{Client, header};
+use anyhow::Context;
+use reqwest::{header, Client};
 
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::fs;
-
-// Import from image_transformer
-use std::sync::mpsc::{channel, Receiver};
-use notify::{Event, EventKind, event::RemoveKind, Config, RecommendedWatcher, Watcher, RecursiveMode};
-use std::path::PathBuf;
-use std::time::Duration;
-use std::process::Command;
-use std::cmp::min;
 
 pub mod server_lib;
 
@@ -37,22 +29,16 @@ pub trait ImmichConfig {
     fn album_id(&self) -> &str;
 }
 
-pub trait TransformerConfig {
-    fn originals_dir(&self) -> &str;
-    fn transformed_dir(&self) -> &str;
-    fn conversion_script(&self) -> &str;
-}
-
 async fn fetch_album_asset_list<T: ImmichConfig>(client: &Client, config: &T) -> anyhow::Result<Vec<Asset>> {
     let url = format!("{}/api/albums/{}?withoutAssets=false",
                       config.immich_url(), config.album_id());
-    
+
     let response = client.get(url)
         .header(header::ACCEPT, "application/json")
         .header("x-api-key", config.api_key())
         .send()
         .await?;
-        
+
     if !response.status().is_success() {
         let status = response.status();
         let text = response.text().await?;
@@ -65,22 +51,22 @@ async fn fetch_album_asset_list<T: ImmichConfig>(client: &Client, config: &T) ->
 
 async fn download_asset<T: ImmichConfig>(client: &Client, config: &T, asset_id: &str, output_path: &str) -> anyhow::Result<()> {
     let url = format!("{}/api/assets/{}/original", config.immich_url(), asset_id);
-    
+
     let response = client.get(url)
         .header(header::ACCEPT, "application/octet-stream")
         .header("x-api-key", config.api_key())
         .send()
         .await?;
-        
+
     if !response.status().is_success() {
         let status = response.status();
         let text = response.text().await?;
         anyhow::bail!("Failed to download asset: HTTP {}: {}", status, text);
     }
-    
+
     let bytes = response.bytes().await?;
     fs::write(output_path, bytes)?;
-    
+
     Ok(())
 }
 
@@ -179,15 +165,3 @@ fn remove_deleted_assets(originals_dir: &str, current_asset_ids: &std::collectio
 // AI! move everything below this line into a separate file image_transformer_lib.rs
 // Image transformer functionality is moved to a separate module
 pub mod image_transformer_lib;
-
-// Re-export the main functions
-pub use image_transformer_lib::{
-    process_existing_files,
-    run_file_watcher_with_timeout,
-    handle_file_system_events,
-    process_file,
-    get_output_path,
-    handle_removed_file,
-};
-
-
