@@ -9,9 +9,9 @@ use std::fs;
 use std::sync::mpsc::{channel, Receiver};
 use notify::{Event, EventKind, event::RemoveKind, Config, RecommendedWatcher, Watcher, RecursiveMode};
 use std::path::PathBuf;
-use std::thread;
 use std::time::Duration;
 use std::process::Command;
+use std::cmp::min;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct AlbumResponse {
@@ -81,9 +81,6 @@ async fn download_asset<T: ImmichConfig>(client: &Client, config: &T, asset_id: 
     
     Ok(())
 }
-
-// Make testing functions public
-pub use crate::run_file_watcher_with_timeout;
 
 pub async fn fetch_and_download_images<T: ImmichConfig>(
     client: &Client,
@@ -206,10 +203,29 @@ pub fn process_existing_files<T: TransformerConfig>(args: &T) -> Result<()> {
     Ok(())
 }
 
-fn handle_file_system_events<T: TransformerConfig>(rx: Receiver<Result<Event, notify::Error>>, args: &T) -> Result<()> {
+fn handle_file_system_events<T: TransformerConfig>(
+    rx: Receiver<Result<Event, notify::Error>>,
+    args: &T,
+    timeout_ms: Option<u64>
+) -> Result<()> {
+    let start_time = std::time::Instant::now();
+
     // Process events from the watcher
     loop {
-        match rx.recv() {
+        // Check if we've exceeded the timeout
+        let wait_time_remaining = if let Some(timeout_ms) = timeout_ms {
+            let elapsed = start_time.elapsed().as_millis() as u64;
+            if timeout_ms <= elapsed {
+                println!("Timeout reached, exiting watcher");
+                break;
+            }
+            min(1000, timeout_ms - elapsed)
+        } else {
+            1000
+        };
+
+        // Try to receive an event, but with a short timeout to let us check the overall timeout
+        match rx.recv_timeout(Duration::from_millis(wait_time_remaining)) {
             Ok(Ok(event)) => {
                 match event.kind {
                     // Handle file creation or modification events
@@ -238,13 +254,17 @@ fn handle_file_system_events<T: TransformerConfig>(rx: Receiver<Result<Event, no
                 }
             }
             Ok(Err(e)) => eprintln!("Watch error: {:?}", e),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                // Just a timeout on the recv, continue the loop
+                continue;
+            },
             Err(e) => {
                 eprintln!("Channel error: {:?}", e);
-                // Sleep to avoid tight loop in case of errors
-                thread::sleep(Duration::from_secs(1));
+                return Err(e.into());
             }
         }
     }
+    Ok(())
 }
 
 /// Get the output path for a given input file path
@@ -317,27 +337,27 @@ fn handle_removed_file<T: TransformerConfig>(file_path: &Path, args: &T) -> Resu
     Ok(())
 }
 
-/// Sets up a file watcher for the specified directory
-pub fn run_file_watcher<T: TransformerConfig + 'static>(args: &T) -> Result<()> {
-    let (tx, rx) = channel();
-    let mut watcher = RecommendedWatcher::new(tx, Config::default())
-        .context("Failed to create file watcher")?;
-    
-    // Start watching the directory
-    watcher.watch(Path::new(args.originals_dir()), RecursiveMode::NonRecursive)
-        .context("Failed to watch directory")?;
-        
-    println!("Watching for new files...");
+// /// Sets up a file watcher for the specified directory
+// pub fn run_file_watcher<T: TransformerConfig + 'static>(args: &T) -> Result<()> {
+//     let (tx, rx) = channel();
+//     let mut watcher = RecommendedWatcher::new(tx, Config::default())
+//         .context("Failed to create file watcher")?;
 
-    handle_file_system_events(rx, args)?;
+//     // Start watching the directory
+//     watcher.watch(Path::new(args.originals_dir()), RecursiveMode::NonRecursive)
+//         .context("Failed to watch directory")?;
 
-    Ok(())
-}
+//     println!("Watching for new files...");
+
+//     handle_file_system_events(rx, args)?;
+
+//     Ok(())
+// }
 
 /// Sets up a file watcher with a timeout for testing
 pub fn run_file_watcher_with_timeout<T: TransformerConfig>(
     args: &T,
-    timeout_ms: u64
+    timeout_ms: Option<u64>
 ) -> Result<()> {
     let (tx, rx) = channel();
     let mut watcher = RecommendedWatcher::new(tx, Config::default())
@@ -346,60 +366,12 @@ pub fn run_file_watcher_with_timeout<T: TransformerConfig>(
     // Start watching the directory
     watcher.watch(Path::new(args.originals_dir()), RecursiveMode::NonRecursive)
         .context("Failed to watch directory")?;
-        
-    println!("Watching for new files with timeout of {}ms...", timeout_ms);
 
-    // Process events with timeout
-    let start_time = std::time::Instant::now();
-    
-    loop {
-        // Check if we've exceeded the timeout
-        if start_time.elapsed().as_millis() > timeout_ms as u128 {
-            println!("Timeout reached, exiting watcher");
-            break;
-        }
-        
-        // Try to receive an event, but with a short timeout to let us check the overall timeout
-        match rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(Ok(event)) => {
-                match event.kind {
-                    // Handle file creation or modification events
-                    EventKind::Create(_) | EventKind::Modify(_) => {
-                        for path in event.paths {
-                            if path.is_file() {
-                                println!("New file detected: {:?}", path);
-                                match process_file(&path, args) {
-                                    Ok(_) => println!("Successfully processed new file"),
-                                    Err(e) => eprintln!("Error processing file: {}", e),
-                                }
-                            }
-                        }
-                    },
-                    // Handle file removal events
-                    EventKind::Remove(RemoveKind::File) => {
-                        for path in event.paths {
-                            println!("File removed: {:?}", path);
-                            match handle_removed_file(&path, args) {
-                                Ok(_) => println!("Successfully handled removed file"),
-                                Err(e) => eprintln!("Error handling removed file: {}", e),
-                            }
-                        }
-                    },
-                    _ => {} // Ignore other event types
-                }
-            },
-            Ok(Err(e)) => eprintln!("Watch error: {:?}", e),
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                // Just a timeout on the recv, continue the loop
-                continue;
-            },
-            Err(e) => {
-                eprintln!("Channel error: {:?}", e);
-                // Sleep to avoid tight loop in case of errors
-                thread::sleep(Duration::from_millis(100));
-            }
-        }
+    if let Some(tout) = timeout_ms {
+        println!("Watching for new files with timeout of {}ms...", tout);
+    } else {
+        println!("Watching for new files...");
     }
-    
-    Ok(())
+
+    handle_file_system_events(rx, args, timeout_ms)
 }

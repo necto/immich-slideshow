@@ -1,5 +1,5 @@
 use anyhow::Result;
-use image_server_lib::{TransformerConfig, process_existing_files};
+use image_server_lib::{TransformerConfig, process_existing_files, run_file_watcher_with_timeout};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
@@ -105,8 +105,7 @@ fn test_run_file_watcher() -> Result<()> {
     // Start the file watcher in a separate thread with a short timeout
     let originals_dir_clone = originals_dir.clone();
     let watcher_handle = std::thread::spawn(move || {
-        use image_server_lib::run_file_watcher_with_timeout;
-        run_file_watcher_with_timeout(&args, 1000).unwrap(); // 1 second timeout
+        run_file_watcher_with_timeout(&args, Some(1000)).unwrap(); // 1 second timeout
     });
     
     // Sleep briefly to let the watcher initialize
