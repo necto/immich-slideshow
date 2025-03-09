@@ -1,8 +1,7 @@
 use actix_web::{test, App, HttpResponse};
-use image_server::{setup_app, AppState};
+use image_server_lib::{setup_app, AppState};
 use std::collections::HashSet;
 use std::fs;
-use std::path::PathBuf;
 use std::sync::atomic::AtomicUsize;
 use tempfile::tempdir;
 

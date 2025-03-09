@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context};
 use reqwest::{Client, header};
 
 use serde::{Deserialize, Serialize};
@@ -12,6 +12,11 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::process::Command;
 use std::cmp::min;
+
+// Import from server
+use actix_files::NamedFile;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use actix_web::{get, web, HttpRequest, HttpResponse};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct AlbumResponse {
@@ -41,7 +46,7 @@ pub trait TransformerConfig {
     fn conversion_script(&self) -> &str;
 }
 
-async fn fetch_album_asset_list<T: ImmichConfig>(client: &Client, config: &T) -> Result<Vec<Asset>> {
+async fn fetch_album_asset_list<T: ImmichConfig>(client: &Client, config: &T) -> anyhow::Result<Vec<Asset>> {
     let url = format!("{}/api/albums/{}?withoutAssets=false",
                       config.immich_url(), config.album_id());
     
@@ -61,7 +66,7 @@ async fn fetch_album_asset_list<T: ImmichConfig>(client: &Client, config: &T) ->
     Ok(resp.assets)
 }
 
-async fn download_asset<T: ImmichConfig>(client: &Client, config: &T, asset_id: &str, output_path: &str) -> Result<()> {
+async fn download_asset<T: ImmichConfig>(client: &Client, config: &T, asset_id: &str, output_path: &str) -> anyhow::Result<()> {
     let url = format!("{}/api/assets/{}/original", config.immich_url(), asset_id);
     
     let response = client.get(url)
@@ -87,7 +92,7 @@ pub async fn fetch_and_download_images<T: ImmichConfig>(
     args: &T,
     originals_dir: &str,
     max_images: usize
-) -> Result<()> {
+) -> anyhow::Result<()> {
     // Fetch assets from album
     let assets = fetch_album_asset_list(client, args).await?;
     println!("Found {} assets in album", assets.len());
@@ -141,7 +146,7 @@ pub async fn fetch_and_download_images<T: ImmichConfig>(
 }
 
 /// Removes files from the originals directory that are no longer in the album
-fn remove_deleted_assets(originals_dir: &str, current_asset_ids: &std::collections::HashSet<String>) -> Result<usize> {
+fn remove_deleted_assets(originals_dir: &str, current_asset_ids: &std::collections::HashSet<String>) -> anyhow::Result<usize> {
     let entries = fs::read_dir(originals_dir)
         .context("Failed to read originals directory")?;
 
@@ -174,7 +179,7 @@ fn remove_deleted_assets(originals_dir: &str, current_asset_ids: &std::collectio
     Ok(removed_count)
 }
 
-pub fn process_existing_files<T: TransformerConfig>(args: &T) -> Result<()> {
+pub fn process_existing_files<T: TransformerConfig>(args: &T) -> anyhow::Result<()> {
     // Get list of files to process
     let entries = fs::read_dir(&args.originals_dir())
         .context("Failed to read originals directory")?;
@@ -204,10 +209,10 @@ pub fn process_existing_files<T: TransformerConfig>(args: &T) -> Result<()> {
 }
 
 fn handle_file_system_events<T: TransformerConfig>(
-    rx: Receiver<Result<Event, notify::Error>>,
+    rx: Receiver<anyhow::Result<Event, notify::Error>>,
     args: &T,
     timeout_ms: Option<u64>
-) -> Result<()> {
+) -> anyhow::Result<()> {
     let start_time = std::time::Instant::now();
 
     // Process events from the watcher
@@ -268,7 +273,7 @@ fn handle_file_system_events<T: TransformerConfig>(
 }
 
 /// Get the output path for a given input file path
-fn get_output_path(file_path: &Path, output_dir: &str) -> Result<String> {
+fn get_output_path(file_path: &Path, output_dir: &str) -> anyhow::Result<String> {
     let file_name = file_path.file_name()
         .context("Invalid file path")?
         .to_string_lossy();
@@ -282,7 +287,7 @@ fn get_output_path(file_path: &Path, output_dir: &str) -> Result<String> {
     Ok(format!("{}/{}", output_dir, output_filename))
 }
 
-fn process_file<T: TransformerConfig>(file_path: &Path, args: &T) -> Result<()> {
+fn process_file<T: TransformerConfig>(file_path: &Path, args: &T) -> anyhow::Result<()> {
     let output_path = get_output_path(file_path, &args.transformed_dir())?;
 
     // Check if output file already exists
@@ -306,7 +311,7 @@ fn process_file<T: TransformerConfig>(file_path: &Path, args: &T) -> Result<()> 
 }
 
 /// Convert an image to grayscale PNG using a bash script that invokes ImageMagick
-fn convert_image(input_path: &str, output_path: &str, script_path: &str) -> Result<()> {
+fn convert_image(input_path: &str, output_path: &str, script_path: &str) -> anyhow::Result<()> {
     let status = Command::new("bash")
         .arg(script_path)
         .arg(input_path)
@@ -322,7 +327,7 @@ fn convert_image(input_path: &str, output_path: &str, script_path: &str) -> Resu
 }
 
 /// Handle a file that has been removed from the originals directory
-fn handle_removed_file<T: TransformerConfig>(file_path: &Path, args: &T) -> Result<()> {
+fn handle_removed_file<T: TransformerConfig>(file_path: &Path, args: &T) -> anyhow::Result<()> {
     let output_path = get_output_path(file_path, &args.transformed_dir())?;
 
     // Check if the output file exists
@@ -358,7 +363,7 @@ fn handle_removed_file<T: TransformerConfig>(file_path: &Path, args: &T) -> Resu
 pub fn run_file_watcher_with_timeout<T: TransformerConfig>(
     args: &T,
     timeout_ms: Option<u64>
-) -> Result<()> {
+) -> anyhow::Result<()> {
     let (tx, rx) = channel();
     let mut watcher = RecommendedWatcher::new(tx, Config::default())
         .context("Failed to create file watcher")?;
@@ -374,4 +379,70 @@ pub fn run_file_watcher_with_timeout<T: TransformerConfig>(
     }
 
     handle_file_system_events(rx, args, timeout_ms)
+}
+
+
+
+// Make this public for testing
+pub struct AppState {
+    pub counter: AtomicUsize,
+    pub image_dir: String,
+}
+
+#[get("/image")]
+async fn get_image(data: actix_web::web::Data<AppState>, req: HttpRequest) -> actix_web::Result<HttpResponse> {
+    // Get all files in the images directory
+    let entries = fs::read_dir(&data.image_dir)
+        .map_err(|e| actix_web::error::ErrorInternalServerError(e))?
+        .filter_map(|entry| {
+            entry.ok().and_then(|e| {
+                let path = e.path();
+                if path.is_file() {
+                    Some(path.to_string_lossy().to_string())
+                } else {
+                    None
+                }
+            })
+        })
+        .collect::<Vec<String>>();
+
+    if entries.is_empty() {
+        return Err(actix_web::error::ErrorInternalServerError("No files found in static directory"));
+    }
+
+    let counter = data.counter.fetch_add(1, Ordering::SeqCst);
+    if entries.len() - 1 <= counter {
+        data.counter.store(0, Ordering::SeqCst);
+    }
+    // Increment counter and get current value
+    let index = counter % entries.len();
+
+    // Choose image based on count
+    let path: PathBuf = entries[index].clone().into();
+    println!("Serving image #{}: {}", index, path.display());
+
+    // Open the file
+    let file = NamedFile::open(path)?;
+
+    let mut response = file.into_response(&req);
+
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        header::HeaderValue::from_static("no-store, no-cache, must-revalidate, max-age=0"),
+    );
+    response.headers_mut().insert(
+        header::PRAGMA,
+        header::HeaderValue::from_static("no-cache"),
+    );
+    response.headers_mut().insert(
+        header::EXPIRES,
+        header::HeaderValue::from_static("0"),
+    );
+
+    Ok(response)
+}
+
+// Extract the app setup into a separate function for testing
+pub fn setup_app(cfg: &mut web::ServiceConfig) {
+    cfg.service(get_image);
 }
