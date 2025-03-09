@@ -3,7 +3,7 @@ use clap::Parser;
 use std::fs;
 use std::path::Path;
 use dotenv::dotenv;
-use image_server_lib::{TransformerConfig, process_existing_files, handle_file_system_events, setup_file_watcher};
+use image_server_lib::{TransformerConfig, process_existing_files, handle_file_system_events, run_file_watcher};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -61,11 +61,5 @@ fn main() -> Result<()> {
     // Process existing files first
     process_existing_files(&args)?;
 
-    // Set up file watcher
-    let (_watcher, rx) = setup_file_watcher(&args.originals_dir)?;
-    
-    // Process events
-    handle_file_system_events(rx, args)?;
-    
-    Ok(())
+    run_file_watcher(&args.originals_dir)
 }

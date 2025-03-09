@@ -315,7 +315,7 @@ fn handle_removed_file<T: TransformerConfig>(file_path: &Path, args: &T) -> Resu
 }
 
 /// Sets up a file watcher for the specified directory
-pub fn setup_file_watcher(directory: &str) -> Result<(RecommendedWatcher, Receiver<Result<Event, notify::Error>>)> {
+pub fn run_file_watcher(directory: &str) -> Result<()> {
     let (tx, rx) = channel();
     let mut watcher = RecommendedWatcher::new(tx, Config::default())
         .context("Failed to create file watcher")?;
@@ -325,6 +325,8 @@ pub fn setup_file_watcher(directory: &str) -> Result<(RecommendedWatcher, Receiv
         .context("Failed to watch directory")?;
         
     println!("Watching for new files...");
-    
-    Ok((watcher, rx))
+
+    handle_file_system_events(rx, args)?;
+
+    Ok()
 }
