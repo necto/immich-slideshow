@@ -9,7 +9,7 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "image-server"
-path = "src/main.rs"
+path = "src/server.rs"
 
 [[bin]]
 name = "immich-fetcher"

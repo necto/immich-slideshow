@@ -35,7 +35,7 @@ async fn get_image(data: actix_web::web::Data<AppState>, req: HttpRequest) -> Re
             })
         })
         .collect::<Vec<String>>();
-    
+
     if entries.is_empty() {
         return Err(actix_web::error::ErrorInternalServerError("No files found in static directory"));
     }
@@ -50,7 +50,7 @@ async fn get_image(data: actix_web::web::Data<AppState>, req: HttpRequest) -> Re
     // Choose image based on count
     let path: PathBuf = entries[index].clone().into();
     println!("Serving image #{}: {}", index, path.display());
-    
+
     // Open the file
     let file = NamedFile::open(path)?;
 
@@ -76,20 +76,20 @@ async fn get_image(data: actix_web::web::Data<AppState>, req: HttpRequest) -> Re
 async fn main() -> std::io::Result<()> {
     // Load environment variables from .env file if present
     dotenv().ok();
-    
+
     // Parse command line arguments
     let args = Args::parse();
-    
+
     println!("Starting server at http://0.0.0.0:8080");
     println!("Access the image at http://0.0.0.0:8080/image");
     println!("The server will cycle through all images in the {} directory", args.image_dir);
-    
+
     // Create and share application state
     let app_state = actix_web::web::Data::new(AppState {
         counter: AtomicUsize::new(0),
         image_dir: args.image_dir,
     });
-    
+
     HttpServer::new(move || {
         App::new()
             .app_data(app_state.clone())
