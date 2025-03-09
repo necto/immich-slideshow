@@ -1,4 +1,6 @@
 use anyhow::{Context, Result};
+// Re-export this module for testing via lib.rs
+pub use self as image_transformer_lib;
 use clap::Parser;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher, event::RemoveKind};
 use std::fs;
@@ -11,7 +13,7 @@ use dotenv::dotenv;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
-struct Args {
+pub struct Args {
     /// Directory containing original images
     #[arg(long, default_value = "originals")]
     originals_dir: String,
@@ -68,7 +70,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn process_existing_files(args: &Args) -> Result<()> {
+pub fn process_existing_files(args: &Args) -> Result<()> {
     // Get list of files to process
     let entries = fs::read_dir(&args.originals_dir)
         .context("Failed to read originals directory")?;
