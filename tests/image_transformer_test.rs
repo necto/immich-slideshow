@@ -53,14 +53,42 @@ fn test_process_existing_files() -> Result<()> {
     // Run the function being tested
     process_existing_files(&args)?;
 
-    // AI! change this to check that every file in the output_dir corresponds to a file in the originals_dir and it has the same number of files
-    // Verify that output files were created
+    // Verify that output files were created correctly
+    // First, read all files from both directories
+    let output_entries = fs::read_dir(&output_dir)?
+        .map(|res| res.map(|e| e.path()))
+        .collect::<Result<Vec<_>, std::io::Error>>()?;
+    
+    // Count the number of files in the output directory
+    let output_file_count = output_entries.len();
+    
+    // Check that we have the correct number of output files
+    assert_eq!(output_file_count, test_files.len(), 
+               "Number of output files ({}) does not match number of input files ({})",
+               output_file_count, test_files.len());
+    
+    // Verify each original file has a corresponding output file
     for filename in &test_files {
         let base_name = Path::new(filename).file_stem().unwrap();
         let output_filename = format!("{}.png", base_name.to_string_lossy());
         let output_path = output_dir.join(&output_filename);
         
         assert!(output_path.exists(), "Output file {} not created", output_filename);
+    }
+    
+    // Verify each output file corresponds to an original file
+    for output_path in output_entries {
+        if let Some(output_filename) = output_path.file_name() {
+            if let Some(output_stem) = output_path.file_stem() {
+                let output_stem_str = output_stem.to_string_lossy();
+                let found_match = test_files.iter().any(|orig_name| {
+                    let orig_stem = Path::new(orig_name).file_stem().unwrap().to_string_lossy();
+                    orig_stem == output_stem_str
+                });
+                
+                assert!(found_match, "Output file {:?} doesn't correspond to any input file", output_filename);
+            }
+        }
     }
     
     Ok(())

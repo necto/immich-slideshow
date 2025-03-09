@@ -315,7 +315,7 @@ fn handle_removed_file<T: TransformerConfig>(file_path: &Path, args: &T) -> Resu
 }
 
 /// Sets up a file watcher for the specified directory
-pub fn run_file_watcher(directory: &str) -> Result<()> {
+pub fn run_file_watcher<T: TransformerConfig + 'static>(directory: &str, args: T) -> Result<()> {
     let (tx, rx) = channel();
     let mut watcher = RecommendedWatcher::new(tx, Config::default())
         .context("Failed to create file watcher")?;
@@ -328,5 +328,5 @@ pub fn run_file_watcher(directory: &str) -> Result<()> {
 
     handle_file_system_events(rx, args)?;
 
-    Ok()
+    Ok(())
 }

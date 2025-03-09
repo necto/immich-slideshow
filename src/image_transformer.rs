@@ -61,5 +61,5 @@ fn main() -> Result<()> {
     // Process existing files first
     process_existing_files(&args)?;
 
-    run_file_watcher(&args.originals_dir)
+    run_file_watcher(&args.originals_dir, args)
 }
