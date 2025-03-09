@@ -6,8 +6,8 @@ use std::path::Path;
 use std::fs;
 
 // Import from image_transformer
-use std::sync::mpsc::Receiver;
-use notify::{Event, EventKind, event::RemoveKind};
+use std::sync::mpsc::{channel, Receiver};
+use notify::{Event, EventKind, event::RemoveKind, Config, RecommendedWatcher, Watcher, RecursiveMode};
 use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
@@ -312,4 +312,19 @@ fn handle_removed_file<T: TransformerConfig>(file_path: &Path, args: &T) -> Resu
     }
 
     Ok(())
+}
+
+/// Sets up a file watcher for the specified directory
+pub fn setup_file_watcher(directory: &str) -> Result<(RecommendedWatcher, Receiver<Result<Event, notify::Error>>)> {
+    let (tx, rx) = channel();
+    let mut watcher = RecommendedWatcher::new(tx, Config::default())
+        .context("Failed to create file watcher")?;
+    
+    // Start watching the directory
+    watcher.watch(Path::new(directory), RecursiveMode::NonRecursive)
+        .context("Failed to watch directory")?;
+        
+    println!("Watching for new files...");
+    
+    Ok((watcher, rx))
 }

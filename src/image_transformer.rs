@@ -1,11 +1,9 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use notify::{Config, RecommendedWatcher, Watcher, RecursiveMode};
 use std::fs;
 use std::path::Path;
-use std::sync::mpsc::channel;
 use dotenv::dotenv;
-use image_server_lib::{TransformerConfig, process_existing_files, handle_file_system_events};
+use image_server_lib::{TransformerConfig, process_existing_files, handle_file_system_events, setup_file_watcher};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -63,17 +61,8 @@ fn main() -> Result<()> {
     // Process existing files first
     process_existing_files(&args)?;
 
-    // AI! factor out the following into a single function call
     // Set up file watcher
-    let (tx, rx) = channel();
-    let mut watcher = RecommendedWatcher::new(tx, Config::default())
-        .context("Failed to create file watcher")?;
-    
-    // Start watching the originals directory
-    watcher.watch(Path::new(&args.originals_dir), RecursiveMode::NonRecursive)
-        .context("Failed to watch directory")?;
-    
-    println!("Watching for new files...");
+    let (_watcher, rx) = setup_file_watcher(&args.originals_dir)?;
     
     // Process events
     handle_file_system_events(rx, args)?;
