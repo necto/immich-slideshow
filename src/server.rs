@@ -1,14 +1,15 @@
 use actix_files::NamedFile;
-use actix_web::{get, App, HttpServer, Result, HttpRequest, HttpResponse, http::header};
+use actix_web::{get, App, HttpServer, Result, HttpRequest, HttpResponse, http::header, web};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::fs;
 use clap::Parser;
 use dotenv::dotenv;
 
-struct AppState {
-    counter: AtomicUsize,
-    image_dir: String,
+// Make this public for testing
+pub struct AppState {
+    pub counter: AtomicUsize,
+    pub image_dir: String,
 }
 
 #[derive(Parser, Debug)]
@@ -72,6 +73,11 @@ async fn get_image(data: actix_web::web::Data<AppState>, req: HttpRequest) -> Re
     Ok(response)
 }
 
+// Extract the app setup into a separate function for testing
+pub fn setup_app(cfg: &mut web::ServiceConfig) {
+    cfg.service(get_image);
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // Load environment variables from .env file if present
@@ -85,7 +91,7 @@ async fn main() -> std::io::Result<()> {
     println!("The server will cycle through all images in the {} directory", args.image_dir);
 
     // Create and share application state
-    let app_state = actix_web::web::Data::new(AppState {
+    let app_state = web::Data::new(AppState {
         counter: AtomicUsize::new(0),
         image_dir: args.image_dir,
     });
@@ -93,7 +99,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .app_data(app_state.clone())
-            .service(get_image)
+            .configure(setup_app)
     })
     .bind(("0.0.0.0", 8080))?
     .run()

@@ -7,6 +7,11 @@ edition = "2021"
 name = "image_server_lib"
 path = "src/lib.rs"
 
+# Add a public library for the server components
+[[lib]]
+name = "image_server"
+path = "src/server.rs"
+
 [[bin]]
 name = "image-server"
 path = "src/server.rs"
