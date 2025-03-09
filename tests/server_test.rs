@@ -1,4 +1,4 @@
-use actix_web::{test, App, HttpResponse};
+use actix_web::{test, App};
 use image_server_lib::{setup_app, AppState};
 use std::collections::HashSet;
 use std::fs;
@@ -34,7 +34,7 @@ async fn test_image_cycling() -> std::io::Result<()> {
     let mut responses = HashSet::new();
     for _ in 0..10 {  // More than the number of images to ensure cycling
         let req = test::TestRequest::get().uri("/image").to_request();
-        let resp: HttpResponse = test::call_and_read_body_json(&app, req).await;
+        let resp = test::call_service(&app, req).await;
         
         // Extract the image content
         let body = test::read_body(resp).await;
