@@ -23,7 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     inotify-tools \
     python3 \
     python3-pip && \
-    pip3 install --break-system-packages --no-cache-dir pillow tensorflow-cpu && \
+    pip3 install --break-system-packages --no-cache-dir pillow pillow-heif tensorflow-cpu && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -17,8 +17,9 @@ if len(sys.argv) != 4:
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
+from PIL import Image
 import numpy as np
-import PIL.Image
+import pillow_heif
 import tensorflow as tf
 
 
@@ -26,25 +27,41 @@ def tensor_to_image(tensor):
     """Converts a tensor to a PIL image."""
     tensor = tensor*255
     tensor = np.array(tensor, dtype=np.uint8)
-    if np.ndim(tensor)>3:
+    if np.ndim(tensor) > 3:
         assert tensor.shape[0] == 1
         tensor = tensor[0]
-    return PIL.Image.fromarray(tensor)
+    return Image.fromarray(tensor)
 
 
 def load_img(path_to_img, max_dim):
-    """Loads an image from the given path and resizes it."""
-    img = tf.io.read_file(path_to_img)
-    img = tf.image.decode_image(img, channels=3)
-    img = tf.image.convert_image_dtype(img, tf.float32)
+    # HEIC is not supported by tf.image, so decode it with pillow-heif + PIL
+    if path_to_img.lower().endswith(".heic"):
+        heif_file = pillow_heif.read_heif(path_to_img)
+        img = Image.frombytes(
+            heif_file.mode,
+            heif_file.size,
+            heif_file.data,
+            "raw",
+            heif_file.mode,
+            heif_file.stride,
+        )
+    else:
+        # Other formats (JPG, PNG, etc.)
+        img = Image.open(path_to_img)
+
+    img = img.convert("RGB")  # ensure 3 channels
+    img = np.array(img)       # convert to NumPy array
+    img = tf.convert_to_tensor(img, dtype=tf.float32) / 255.0
+
+    # Resize
     shape = tf.cast(tf.shape(img)[:-1], tf.float32)
-    long_dim = max(shape)
+    long_dim = tf.reduce_max(shape)
     scale = max_dim / long_dim
     new_shape = tf.cast(shape * scale, tf.int32)
-    img = tf.image.resize(img, new_shape)
-    img = img[tf.newaxis, :]
-    return img
 
+    img = tf.image.resize(img, new_shape)
+    img = img[tf.newaxis, :]  # add batch dim
+    return img
 
 hub_model = tf.saved_model.load('/app/saved_model')
 
