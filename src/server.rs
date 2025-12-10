@@ -28,6 +28,7 @@ async fn main() -> std::io::Result<()> {
     let app_state = web::Data::new(AppState {
         counter: AtomicUsize::new(0),
         image_dir: args.image_dir,
+        params_file: "params.json".to_string(),
     });
 
     HttpServer::new(move || {

@@ -104,6 +104,63 @@ cargo run --bin image-server
 
 Then access the images at: http://localhost:8080/image
 
+#### Parameter Storage and Control Panel
+
+The image server includes a parameter storage feature that captures HTTP GET parameters and makes them retrievable via a control panel:
+
+**Storing Parameters:**
+
+Pass any GET parameters to the `/image` endpoint:
+```
+http://localhost:8080/image?param1=18&alfa=x&status=active
+```
+
+Parameters are automatically stored in a JSON file with:
+- **Value**: The parameter value (URL-decoded)
+- **Timestamp**: Unix timestamp (seconds since epoch) when the parameter was last received
+
+**Retrieving Parameters:**
+
+Access the `/control-panel` endpoint to view all stored parameters:
+```
+http://localhost:8080/control-panel
+```
+
+This returns a JSON response like:
+```json
+{
+  "param1": {
+    "value": "18",
+    "timestamp": 1702000000
+  },
+  "alfa": {
+    "value": "x",
+    "timestamp": 1702000000
+  },
+  "status": {
+    "value": "active",
+    "timestamp": 1702000000
+  }
+}
+```
+
+**Features:**
+- Multiple parameters can be passed in a single request
+- Each parameter is stored with its last-received value and timestamp
+- New parameter values overwrite previous values for the same parameter
+- Other parameters remain unaffected when one parameter is updated
+- URL-encoded parameters are automatically decoded (e.g., spaces as %20)
+- Parameters persist in `params.json` file in the working directory
+- Returns empty JSON object `{}` if no parameters have been stored yet
+
+**Use Cases:**
+
+This feature is particularly useful for tracking status information from kiosk devices:
+
+- **Battery Level Monitoring**: E-ink displays like Kindles can periodically report their battery level by requesting `/image?battery=85&device_id=kindle_1`, allowing you to monitor device health from the control panel
+- **Device Status Tracking**: Report WiFi signal strength, memory usage, or other system metrics
+- **Uptime Monitoring**: Timestamp tracking allows you to see when devices last reported in
+
 ## Style Transfer
 
 The system uses TensorFlow's arbitrary image stylization model to apply artistic styles to your photos. To change the style:
