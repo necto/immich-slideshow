@@ -424,6 +424,29 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
         } else {
             move_buttons.push_str("<span class='move-btn disabled'>→ Right</span>");
         }
+        
+        // Move to after current image button (only if not already after current)
+        let after_current_pos = next_index + 1;
+        if index != after_current_pos && after_current_pos <= entries.len() {
+            // If moving an image from before current to after current, we need to adjust the current index
+            // to keep the same image highlighted (decrease by 1 because removal shifts indices)
+            let new_next_index = if index < next_index { next_index - 1 } else { next_index };
+            move_buttons.push_str(&format!(
+                "<a href='/all-images?image-name={}&move-to={}&next-index={}' class='move-btn'>↓ After Current</a>",
+                urlencoding::encode(filename),
+                after_current_pos,
+                new_next_index
+            ));
+        }
+        
+        // Move to end button (only if not already at end)
+        if index < entries.len() - 1 {
+            move_buttons.push_str(&format!(
+                "<a href='/all-images?image-name={}&move-to={}' class='move-btn'>↓ To End</a>",
+                urlencoding::encode(filename),
+                entries.len() - 1
+            ));
+        }
 
         html.push_str(&format!(
             "<div class='{}'>\
