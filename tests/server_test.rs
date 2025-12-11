@@ -6,28 +6,49 @@ use std::sync::atomic::AtomicUsize;
 use tempfile::tempdir;
 use serde_json::Value;
 
+// Helper function to create test images in a directory
+fn create_test_images(image_path: &str, count: usize) -> std::io::Result<()> {
+    for i in 1..=count {
+        let file_path = format!("{}/img{}.png", image_path, i);
+        fs::write(&file_path, format!("Image {}", i))?;
+    }
+    Ok(())
+}
+
+// Helper function to create test images with custom pattern
+fn create_test_images_with_pattern(
+    image_path: &str,
+    pattern: &str,
+    count: usize,
+) -> std::io::Result<()> {
+    for i in 1..=count {
+        let file_path = format!("{}/{}{}.png", image_path, pattern, i);
+        fs::write(&file_path, format!("Test image content {}", i))?;
+    }
+    Ok(())
+}
+
+// Helper function to create AppState
+fn create_app_state(image_path: &str) -> actix_web::web::Data<AppState> {
+    actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.to_string(),
+        params_file: format!("{}/params.json", image_path),
+        image_order_file: format!("{}/image_order.json", image_path),
+    })
+}
+
 #[actix_web::test]
 async fn test_image_cycling() -> std::io::Result<()> {
     // Create a temporary directory with test images
     let temp_dir = tempdir()?;
     let image_path = temp_dir.path().to_str().unwrap().to_string();
     
-    // Create some test images with different content
-    for i in 1..=5 {
-        let file_path = format!("{}/test{}.png", image_path, i);
-        fs::write(&file_path, format!("Test image content {}", i))?;
-    }
+    // Create test images
+    create_test_images_with_pattern(&image_path, "test", 5)?;
     
-    // Create app state with our temporary image directory
-    let temp_params_file = format!("{}/params.json", image_path);
-    let app_state = actix_web::web::Data::new(AppState {
-        counter: AtomicUsize::new(0),
-        image_dir: image_path.clone(),
-        params_file: temp_params_file.clone(),
-        image_order_file: format!("{}/image_order.json", image_path),
-    });
-    
-    // Set up the test app
+    // Create app state and service
+    let app_state = create_app_state(&image_path);
     let app = test::init_service(
         App::new()
             .app_data(app_state)
@@ -59,20 +80,12 @@ async fn test_parameter_storage_and_retrieval() -> std::io::Result<()> {
     // Create a temporary directory
     let temp_dir = tempdir()?;
     let image_path = temp_dir.path().to_str().unwrap().to_string();
-    let params_file = format!("{}/params.json", image_path);
     
     // Create a test image
     fs::write(format!("{}/test.png", image_path), "Test content")?;
     
-    // Create app state
-    let app_state = actix_web::web::Data::new(AppState {
-        counter: AtomicUsize::new(0),
-        image_dir: image_path.clone(),
-        params_file: params_file.clone(),
-        image_order_file: format!("{}/image_order.json", image_path),
-    });
-    
-    // Set up the test app
+    // Create app state and service
+    let app_state = create_app_state(&image_path);
     let app = test::init_service(
         App::new()
             .app_data(app_state)
@@ -117,20 +130,12 @@ async fn test_parameter_overwrite() -> std::io::Result<()> {
     // Create a temporary directory
     let temp_dir = tempdir()?;
     let image_path = temp_dir.path().to_str().unwrap().to_string();
-    let params_file = format!("{}/params.json", image_path);
     
     // Create a test image
     fs::write(format!("{}/test.png", image_path), "Test content")?;
     
-    // Create app state
-    let app_state = actix_web::web::Data::new(AppState {
-        counter: AtomicUsize::new(0),
-        image_dir: image_path.clone(),
-        params_file: params_file.clone(),
-        image_order_file: format!("{}/image_order.json", image_path),
-    });
-    
-    // Set up the test app
+    // Create app state and service
+    let app_state = create_app_state(&image_path);
     let app = test::init_service(
         App::new()
             .app_data(app_state)
@@ -169,18 +174,12 @@ async fn test_control_panel_empty() -> std::io::Result<()> {
     // Create a temporary directory
     let temp_dir = tempdir()?;
     let image_path = temp_dir.path().to_str().unwrap().to_string();
-    let params_file = format!("{}/params.json", image_path);
     
     // Create a test image
     fs::write(format!("{}/test.png", image_path), "Test content")?;
     
-    // Create app state (without creating the params file)
-    let app_state = actix_web::web::Data::new(AppState {
-        counter: AtomicUsize::new(0),
-        image_dir: image_path.clone(),
-        params_file: params_file.clone(),
-        image_order_file: format!("{}/image_order.json", image_path),
-    });
+    // Create app state
+    let app_state = create_app_state(&image_path);
     
     // Set up the test app
     let app = test::init_service(
@@ -210,18 +209,12 @@ async fn test_url_encoded_parameters() -> std::io::Result<()> {
     // Create a temporary directory
     let temp_dir = tempdir()?;
     let image_path = temp_dir.path().to_str().unwrap().to_string();
-    let params_file = format!("{}/params.json", image_path);
     
     // Create a test image
     fs::write(format!("{}/test.png", image_path), "Test content")?;
     
     // Create app state
-    let app_state = actix_web::web::Data::new(AppState {
-        counter: AtomicUsize::new(0),
-        image_dir: image_path.clone(),
-        params_file: params_file.clone(),
-        image_order_file: format!("{}/image_order.json", image_path),
-    });
+    let app_state = create_app_state(&image_path);
     
     // Set up the test app
     let app = test::init_service(
@@ -257,18 +250,12 @@ async fn test_selective_parameter_overwrite() -> std::io::Result<()> {
     // Create a temporary directory
     let temp_dir = tempdir()?;
     let image_path = temp_dir.path().to_str().unwrap().to_string();
-    let params_file = format!("{}/params.json", image_path);
     
     // Create a test image
     fs::write(format!("{}/test.png", image_path), "Test content")?;
     
     // Create app state
-    let app_state = actix_web::web::Data::new(AppState {
-        counter: AtomicUsize::new(0),
-        image_dir: image_path.clone(),
-        params_file: params_file.clone(),
-        image_order_file: format!("{}/image_order.json", image_path),
-    });
+    let app_state = create_app_state(&image_path);
     
     // Set up the test app
     let app = test::init_service(
@@ -323,21 +310,11 @@ async fn test_all_images_page() -> std::io::Result<()> {
     let temp_dir = tempdir()?;
     let image_path = temp_dir.path().to_str().unwrap().to_string();
     
-    // Create some test images
-    for i in 1..=3 {
-        let file_path = format!("{}/test{}.png", image_path, i);
-        fs::write(&file_path, format!("Test image content {}", i))?;
-    }
+    // Create test images
+    create_test_images_with_pattern(&image_path, "test", 3)?;
     
-    // Create app state
-    let app_state = actix_web::web::Data::new(AppState {
-        counter: AtomicUsize::new(0),
-        image_dir: image_path.clone(),
-        params_file: format!("{}/params.json", image_path),
-        image_order_file: format!("{}/image_order.json", image_path),
-    });
-    
-    // Set up the test app
+    // Create app state and service
+    let app_state = create_app_state(&image_path);
     let app = test::init_service(
         App::new()
             .app_data(app_state)
@@ -371,10 +348,7 @@ async fn test_all_images_next_indicator() -> std::io::Result<()> {
     let image_path = temp_dir.path().to_str().unwrap().to_string();
     
     // Create some test images
-    for i in 1..=4 {
-        let file_path = format!("{}/image{}.png", image_path, i);
-        fs::write(&file_path, format!("Test image {}", i))?;
-    }
+    create_test_images_with_pattern(&image_path, "image", 4)?;
     
     // Create app state with counter at 2
     let app_state = actix_web::web::Data::new(AppState {
@@ -432,12 +406,7 @@ async fn test_all_images_empty_directory() -> std::io::Result<()> {
     let image_path = temp_dir.path().to_str().unwrap().to_string();
     
     // Create app state
-    let app_state = actix_web::web::Data::new(AppState {
-        counter: AtomicUsize::new(0),
-        image_dir: image_path.clone(),
-        params_file: format!("{}/params.json", image_path),
-        image_order_file: format!("{}/image_order.json", image_path),
-    });
+    let app_state = create_app_state(&image_path);
     
     // Set up the test app
     let app = test::init_service(
@@ -471,12 +440,7 @@ async fn test_file_endpoint() -> std::io::Result<()> {
     fs::write(format!("{}/test2.png", image_path), "Test image 2 content")?;
     
     // Create app state
-    let app_state = actix_web::web::Data::new(AppState {
-        counter: AtomicUsize::new(0),
-        image_dir: image_path.clone(),
-        params_file: format!("{}/params.json", image_path),
-        image_order_file: format!("{}/image_order.json", image_path),
-    });
+    let app_state = create_app_state(&image_path);
     
     // Set up the test app
     let app = test::init_service(
@@ -549,12 +513,7 @@ async fn test_file_endpoint_not_found() -> std::io::Result<()> {
     fs::write(format!("{}/test.png", image_path), "Test content")?;
     
     // Create app state
-    let app_state = actix_web::web::Data::new(AppState {
-        counter: AtomicUsize::new(0),
-        image_dir: image_path.clone(),
-        params_file: format!("{}/params.json", image_path),
-        image_order_file: format!("{}/image_order.json", image_path),
-    });
+    let app_state = create_app_state(&image_path);
     
     // Set up the test app
     let app = test::init_service(
@@ -581,12 +540,7 @@ async fn test_file_endpoint_directory_traversal() -> std::io::Result<()> {
     fs::write(format!("{}/test.png", image_path), "Test content")?;
     
     // Create app state
-    let app_state = actix_web::web::Data::new(AppState {
-        counter: AtomicUsize::new(0),
-        image_dir: image_path.clone(),
-        params_file: format!("{}/params.json", image_path),
-        image_order_file: format!("{}/image_order.json", image_path),
-    });
+    let app_state = create_app_state(&image_path);
     
     // Set up the test app
     let app = test::init_service(
@@ -614,18 +568,10 @@ async fn test_all_images_uses_file_endpoint() -> std::io::Result<()> {
     let image_path = temp_dir.path().to_str().unwrap().to_string();
     
     // Create some test images
-    for i in 1..=3 {
-        let file_path = format!("{}/image{}.png", image_path, i);
-        fs::write(&file_path, format!("Test image {}", i))?;
-    }
+    create_test_images_with_pattern(&image_path, "image", 3)?;
     
     // Create app state
-    let app_state = actix_web::web::Data::new(AppState {
-        counter: AtomicUsize::new(0),
-        image_dir: image_path.clone(),
-        params_file: format!("{}/params.json", image_path),
-        image_order_file: format!("{}/image_order.json", image_path),
-    });
+    let app_state = create_app_state(&image_path);
     
     // Set up the test app
     let app = test::init_service(
@@ -665,12 +611,7 @@ async fn test_image_and_all_images_same_order() -> std::io::Result<()> {
     fs::write(format!("{}/m.png", image_path), "M image")?;
     
     // Create app state
-    let app_state = actix_web::web::Data::new(AppState {
-        counter: AtomicUsize::new(0),
-        image_dir: image_path.clone(),
-        params_file: format!("{}/params.json", image_path),
-        image_order_file: format!("{}/image_order.json", image_path),
-    });
+    let app_state = create_app_state(&image_path);
     
     // Set up the test app
     let app = test::init_service(
@@ -740,10 +681,7 @@ async fn test_reorder_images_move_to_position() -> std::io::Result<()> {
     let order_file = format!("{}/image_order.json", image_path);
     
     // Create test images
-    for i in 1..=3 {
-        let file_path = format!("{}/image{}.png", image_path, i);
-        fs::write(&file_path, format!("Test image {}", i))?;
-    }
+    create_test_images_with_pattern(&image_path, "image", 3)?;
     
     // Create app state
     let app_state = actix_web::web::Data::new(AppState {
@@ -778,7 +716,7 @@ async fn test_reorder_images_move_to_position() -> std::io::Result<()> {
     let body = test::read_body(resp).await;
     let content = String::from_utf8_lossy(&body).to_string();
     
-    assert_eq!(content, "Test image 2");
+    assert_eq!(content, "Test image content 2");
     
     Ok(())
 }
@@ -791,8 +729,14 @@ async fn test_reorder_images_persistence() -> std::io::Result<()> {
     let order_file = format!("{}/image_order.json", image_path);
     
     // Create test images
+    create_test_images(&image_path, 3)?;
+    
+    // Rename them to file*.png
     for i in 1..=3 {
-        fs::write(format!("{}/file{}.png", image_path, i), format!("Image {}", i))?;
+        fs::rename(
+            format!("{}/img{}.png", image_path, i),
+            format!("{}/file{}.png", image_path, i)
+        )?;
     }
     
     // Create app state
@@ -836,9 +780,7 @@ async fn test_reorder_multiple_times() -> std::io::Result<()> {
     let temp_dir = tempdir()?;
     let image_path = temp_dir.path().to_str().unwrap().to_string();
     
-    for i in 1..=4 {
-        fs::write(format!("{}/img{}.png", image_path, i), format!("Image {}", i))?;
-    }
+    create_test_images(&image_path, 4)?;
     
     let app_state = actix_web::web::Data::new(AppState {
         counter: AtomicUsize::new(0),
@@ -891,8 +833,14 @@ async fn test_reorder_nonexistent_image_returns_error() -> std::io::Result<()> {
     let temp_dir = tempdir()?;
     let image_path = temp_dir.path().to_str().unwrap().to_string();
     
+    create_test_images(&image_path, 3)?;
+    
+    // Rename to image*.png pattern
     for i in 1..=3 {
-        fs::write(format!("{}/image{}.png", image_path, i), format!("Image {}", i))?;
+        fs::rename(
+            format!("{}/img{}.png", image_path, i),
+            format!("{}/image{}.png", image_path, i)
+        )?;
     }
     
     let app_state = actix_web::web::Data::new(AppState {
@@ -938,16 +886,9 @@ async fn test_new_images_inserted_after_current_position() -> std::io::Result<()
     let image_path = temp_dir.path().to_str().unwrap().to_string();
     
     // Create initial images
-    for i in 1..=3 {
-        fs::write(format!("{}/img{}.png", image_path, i), format!("Image {}", i))?;
-    }
+    create_test_images(&image_path, 3)?;
     
-    let app_state = actix_web::web::Data::new(AppState {
-        counter: AtomicUsize::new(0),
-        image_dir: image_path.clone(),
-        params_file: format!("{}/params.json", image_path),
-        image_order_file: format!("{}/image_order.json", image_path),
-    });
+    let app_state = create_app_state(&image_path);
     
     let app = test::init_service(
         App::new()
@@ -1005,9 +946,7 @@ async fn test_multiple_new_images_near_end_of_list() -> std::io::Result<()> {
     let order_file = format!("{}/image_order.json", image_path);
     
     // Create initial images
-    for i in 1..=5 {
-        fs::write(format!("{}/img{}.png", image_path, i), format!("Image {}", i))?;
-    }
+    create_test_images(&image_path, 5)?;
     
     let app_state = actix_web::web::Data::new(AppState {
         counter: AtomicUsize::new(0),
@@ -1092,9 +1031,7 @@ async fn test_new_images_with_counter_at_list_end() -> std::io::Result<()> {
     let order_file = format!("{}/image_order.json", image_path);
     
     // Create initial images
-    for i in 1..=3 {
-        fs::write(format!("{}/img{}.png", image_path, i), format!("Image {}", i))?;
-    }
+    create_test_images(&image_path, 3)?;
     
     let app_state = actix_web::web::Data::new(AppState {
         counter: AtomicUsize::new(0),
@@ -1155,16 +1092,9 @@ async fn test_set_next_index_parameter() -> std::io::Result<()> {
     let image_path = temp_dir.path().to_str().unwrap().to_string();
     
     // Create test images
-    for i in 1..=5 {
-        fs::write(format!("{}/img{}.png", image_path, i), format!("Image {}", i))?;
-    }
+    create_test_images(&image_path, 5)?;
     
-    let app_state = actix_web::web::Data::new(AppState {
-        counter: AtomicUsize::new(0),
-        image_dir: image_path.clone(),
-        params_file: format!("{}/params.json", image_path),
-        image_order_file: format!("{}/image_order.json", image_path),
-    });
+    let app_state = create_app_state(&image_path);
     
     let app = test::init_service(
         App::new()
@@ -1217,16 +1147,9 @@ async fn test_next_index_zero() -> std::io::Result<()> {
     let image_path = temp_dir.path().to_str().unwrap().to_string();
     
     // Create test images
-    for i in 1..=3 {
-        fs::write(format!("{}/img{}.png", image_path, i), format!("Image {}", i))?;
-    }
+    create_test_images(&image_path, 3)?;
     
-    let app_state = actix_web::web::Data::new(AppState {
-        counter: AtomicUsize::new(0),
-        image_dir: image_path.clone(),
-        params_file: format!("{}/params.json", image_path),
-        image_order_file: format!("{}/image_order.json", image_path),
-    });
+    let app_state = create_app_state(&image_path);
     
     let app = test::init_service(
         App::new()
@@ -1269,16 +1192,9 @@ async fn test_next_index_with_reorder() -> std::io::Result<()> {
     let image_path = temp_dir.path().to_str().unwrap().to_string();
     
     // Create test images
-    for i in 1..=4 {
-        fs::write(format!("{}/img{}.png", image_path, i), format!("Image {}", i))?;
-    }
+    create_test_images(&image_path, 4)?;
     
-    let app_state = actix_web::web::Data::new(AppState {
-        counter: AtomicUsize::new(0),
-        image_dir: image_path.clone(),
-        params_file: format!("{}/params.json", image_path),
-        image_order_file: format!("{}/image_order.json", image_path),
-    });
+    let app_state = create_app_state(&image_path);
     
     let app = test::init_service(
         App::new()
@@ -1314,16 +1230,9 @@ async fn test_next_index_sequence() -> std::io::Result<()> {
     let image_path = temp_dir.path().to_str().unwrap().to_string();
     
     // Create test images
-    for i in 1..=5 {
-        fs::write(format!("{}/img{}.png", image_path, i), format!("Image {}", i))?;
-    }
+    create_test_images(&image_path, 5)?;
     
-    let app_state = actix_web::web::Data::new(AppState {
-        counter: AtomicUsize::new(0),
-        image_dir: image_path.clone(),
-        params_file: format!("{}/params.json", image_path),
-        image_order_file: format!("{}/image_order.json", image_path),
-    });
+    let app_state = create_app_state(&image_path);
     
     let app = test::init_service(
         App::new()
