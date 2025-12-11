@@ -406,23 +406,23 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
         // Move left button (only if not first)
         if index > 0 {
             move_buttons.push_str(&format!(
-                "<a href='/all-images?image-name={}&move-to={}' class='move-btn'>← Left</a>",
+                "<a href='/all-images?image-name={}&move-to={}' class='move-btn' title='Left'>←</a>",
                 urlencoding::encode(filename),
                 index - 1
             ));
         } else {
-            move_buttons.push_str("<span class='move-btn disabled'>← Left</span>");
+            move_buttons.push_str("<span class='move-btn disabled' title='Left'>←</span>");
         }
         
         // Move right button (only if not last)
         if index < entries.len() - 1 {
             move_buttons.push_str(&format!(
-                "<a href='/all-images?image-name={}&move-to={}' class='move-btn'>→ Right</a>",
+                "<a href='/all-images?image-name={}&move-to={}' class='move-btn' title='Right'>→</a>",
                 urlencoding::encode(filename),
                 index + 1
             ));
         } else {
-            move_buttons.push_str("<span class='move-btn disabled'>→ Right</span>");
+            move_buttons.push_str("<span class='move-btn disabled' title='Right'>→</span>");
         }
         
         // Move to after current image button (only if not already after current)
@@ -432,7 +432,7 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
             let new_next_index = if index < next_index { next_index - 1 } else { next_index };
             let after_current_pos = if index < next_index { next_index  } else { next_index + 1 };
             move_buttons.push_str(&format!(
-                "<a href='/all-images?image-name={}&move-to={}&next-index={}' class='move-btn'>↓ After Current</a>",
+                "<a href='/all-images?image-name={}&move-to={}&next-index={}' class='move-btn' title='After Current'>↯</a>",
                 urlencoding::encode(filename),
                 after_current_pos,
                 new_next_index
@@ -442,7 +442,7 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
         // Move to end button (only if not already at end)
         if index < entries.len() - 1 {
             move_buttons.push_str(&format!(
-                "<a href='/all-images?image-name={}&move-to={}' class='move-btn'>↓ To End</a>",
+                "<a href='/all-images?image-name={}&move-to={}' class='move-btn' title='To End'>⤓</a>",
                 urlencoding::encode(filename),
                 entries.len() - 1
             ));
