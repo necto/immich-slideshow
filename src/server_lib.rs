@@ -370,6 +370,11 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
             .image-info { margin-top: 10px; font-size: 14px; }\
             .image-name { font-weight: bold; word-break: break-word; margin: 5px 0; }\
             .image-date { color: #666; font-size: 13px; }\
+            .image-actions { margin-top: 10px; }\
+            .set-next-btn { background-color: #4CAF50; color: white; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; text-decoration: none; display: inline-block; }\
+            .set-next-btn:hover { background-color: #45a049; }\
+            .image-card.next .set-next-btn { background-color: #ffc107; color: #333; }\
+            .image-card.next .set-next-btn:hover { background-color: #ffb300; }\
         </style>\
         </head><body>\
         <h1>Image Gallery</h1>"
@@ -411,12 +416,16 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
                     <div class='image-name'>{}</div>\
                     <div class='image-date'>{}</div>\
                 </div>\
+                <div class='image-actions'>\
+                    <a href='/all-images?next-index={}' class='set-next-btn'>Set as Next</a>\
+                </div>\
             </div>",
             card_class,
             urlencoding::encode(filename),
             filename,
             filename,
-            date_str
+            date_str,
+            index
         ));
     }
 
