@@ -275,20 +275,7 @@ async fn get_file(data: actix_web::web::Data<AppState>, filename: web::Path<Stri
     // Open and serve the file
     let file = NamedFile::open(&canonicalized_file_path)?;
     
-    let mut response = file.into_response(&req);
-    
-    response.headers_mut().insert(
-        header::CACHE_CONTROL,
-        header::HeaderValue::from_static("no-store, no-cache, must-revalidate, max-age=0"),
-    );
-    response.headers_mut().insert(
-        header::PRAGMA,
-        header::HeaderValue::from_static("no-cache"),
-    );
-    response.headers_mut().insert(
-        header::EXPIRES,
-        header::HeaderValue::from_static("0"),
-    );
+    let response = file.into_response(&req);
     
     Ok(response)
 }
