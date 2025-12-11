@@ -426,11 +426,11 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
         }
         
         // Move to after current image button (only if not already after current)
-        let after_current_pos = next_index + 1;
-        if index != after_current_pos && after_current_pos <= entries.len() {
+        if index != next_index + 1 && index != next_index {
             // If moving an image from before current to after current, we need to adjust the current index
             // to keep the same image highlighted (decrease by 1 because removal shifts indices)
             let new_next_index = if index < next_index { next_index - 1 } else { next_index };
+            let after_current_pos = if index < next_index { next_index  } else { next_index + 1 };
             move_buttons.push_str(&format!(
                 "<a href='/all-images?image-name={}&move-to={}&next-index={}' class='move-btn'>↓ After Current</a>",
                 urlencoding::encode(filename),
