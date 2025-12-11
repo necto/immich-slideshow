@@ -310,3 +310,409 @@ async fn test_selective_parameter_overwrite() -> std::io::Result<()> {
     
     Ok(())
 }
+
+#[actix_web::test]
+async fn test_all_images_page() -> std::io::Result<()> {
+    // Create a temporary directory with test images
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    
+    // Create some test images
+    for i in 1..=3 {
+        let file_path = format!("{}/test{}.png", image_path, i);
+        fs::write(&file_path, format!("Test image content {}", i))?;
+    }
+    
+    // Create app state
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+    });
+    
+    // Set up the test app
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // Request /all-images
+    let req = test::TestRequest::get().uri("/all-images").to_request();
+    let resp = test::call_service(&app, req).await;
+    
+    assert!(resp.status().is_success());
+    let body = test::read_body(resp).await;
+    let content = String::from_utf8_lossy(&body).to_string();
+    
+    // Verify HTML contains expected elements
+    assert!(content.contains("Image Gallery"), "Should have gallery title");
+    assert!(content.contains("Next image to serve"), "Should show next indicator");
+    assert!(content.contains("test1.png"), "Should contain first image filename");
+    assert!(content.contains("test2.png"), "Should contain second image filename");
+    assert!(content.contains("test3.png"), "Should contain third image filename");
+    assert!(content.contains("image-grid"), "Should have image grid styling");
+    assert!(content.contains("(out of 3)"), "Should show count of images");
+    
+    Ok(())
+}
+
+#[actix_web::test]
+async fn test_all_images_next_indicator() -> std::io::Result<()> {
+    // Create a temporary directory with test images
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    
+    // Create some test images
+    for i in 1..=4 {
+        let file_path = format!("{}/image{}.png", image_path, i);
+        fs::write(&file_path, format!("Test image {}", i))?;
+    }
+    
+    // Create app state with counter at 2
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(2),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+    });
+    
+    // Set up the test app
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // Request /all-images
+    let req = test::TestRequest::get().uri("/all-images").to_request();
+    let resp = test::call_service(&app, req).await;
+    
+    assert!(resp.status().is_success());
+    let body = test::read_body(resp).await;
+    let content = String::from_utf8_lossy(&body).to_string();
+    
+    // With counter at 2 and 4 images, next index should be 2 (0-based), which is "3" in display
+    assert!(content.contains("Next image to serve:</strong> 3"), "Should indicate image 3 is next");
+    assert!(content.contains("(out of 4)"), "Should show 4 images total");
+    
+    // Verify the next image card is rendered with special styling
+    // The card for image3.png should have the "image-card next" class with yellow background
+    assert!(content.contains("class='image-card next'"), "Next image card should have special styling class");
+    assert!(content.contains("#fff9e6"), "Next image card should have yellow background color");
+    assert!(content.contains("#ffc107"), "Next image card should have golden border");
+    
+    // Verify it's specifically image3.png with the next styling
+    // Extract the content between <div class='image-card next'> and </div> to verify it contains image3.png
+    if let Some(pos) = content.find("<div class='image-card next'>") {
+        let next_card_section = &content[pos..];
+        if let Some(end) = next_card_section.find("</div>") {
+            let next_card_content = &next_card_section[..end];
+            assert!(next_card_content.contains("image3.png"), 
+                "The next styled card should contain image3.png, but got: {}", next_card_content);
+        }
+    } else {
+        panic!("Could not find the next image card in HTML");
+    }
+    
+    Ok(())
+}
+
+#[actix_web::test]
+async fn test_all_images_empty_directory() -> std::io::Result<()> {
+    // Create a temporary directory WITHOUT images
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    
+    // Create app state
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+    });
+    
+    // Set up the test app
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // Request /all-images
+    let req = test::TestRequest::get().uri("/all-images").to_request();
+    let resp = test::call_service(&app, req).await;
+    
+    assert!(resp.status().is_success());
+    let body = test::read_body(resp).await;
+    let content = String::from_utf8_lossy(&body).to_string();
+    
+    // Verify message for no images
+    assert!(content.contains("No images found"), "Should show no images message");
+    
+    Ok(())
+}
+
+#[actix_web::test]
+async fn test_file_endpoint() -> std::io::Result<()> {
+    // Create a temporary directory with test images
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    
+    // Create some test images
+    fs::write(format!("{}/test1.png", image_path), "Test image 1 content")?;
+    fs::write(format!("{}/test2.png", image_path), "Test image 2 content")?;
+    
+    // Create app state
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+    });
+    
+    // Set up the test app
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // Request specific file
+    let req = test::TestRequest::get().uri("/file/test1.png").to_request();
+    let resp = test::call_service(&app, req).await;
+    
+    assert!(resp.status().is_success());
+    let body = test::read_body(resp).await;
+    let content = String::from_utf8_lossy(&body).to_string();
+    
+    // Verify correct file was served
+    assert_eq!(content, "Test image 1 content");
+    
+    Ok(())
+}
+
+#[actix_web::test]
+async fn test_file_endpoint_different_files() -> std::io::Result<()> {
+    // Create a temporary directory with test images
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    
+    // Create test images with different content
+    fs::write(format!("{}/test1.png", image_path), "Content 1")?;
+    fs::write(format!("{}/test2.png", image_path), "Content 2")?;
+    fs::write(format!("{}/test3.png", image_path), "Content 3")?;
+    
+    // Create app state
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+    });
+    
+    // Set up the test app
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // Test multiple files
+    for (filename, expected_content) in &[("test1.png", "Content 1"), ("test2.png", "Content 2"), ("test3.png", "Content 3")] {
+        let req = test::TestRequest::get().uri(&format!("/file/{}", filename)).to_request();
+        let resp = test::call_service(&app, req).await;
+        
+        assert!(resp.status().is_success());
+        let body = test::read_body(resp).await;
+        let content = String::from_utf8_lossy(&body).to_string();
+        
+        assert_eq!(&content, *expected_content, "File {} should have correct content", filename);
+    }
+    
+    Ok(())
+}
+
+#[actix_web::test]
+async fn test_file_endpoint_not_found() -> std::io::Result<()> {
+    // Create a temporary directory with test images
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    
+    fs::write(format!("{}/test.png", image_path), "Test content")?;
+    
+    // Create app state
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+    });
+    
+    // Set up the test app
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // Request non-existent file
+    let req = test::TestRequest::get().uri("/file/nonexistent.png").to_request();
+    let resp = test::call_service(&app, req).await;
+    
+    assert_eq!(resp.status(), 404, "Should return 404 for non-existent file");
+    
+    Ok(())
+}
+
+#[actix_web::test]
+async fn test_file_endpoint_directory_traversal() -> std::io::Result<()> {
+    // Create a temporary directory structure
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    
+    fs::write(format!("{}/test.png", image_path), "Test content")?;
+    
+    // Create app state
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+    });
+    
+    // Set up the test app
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // Try directory traversal attacks
+    for dangerous_path in &["../test.png", "../../etc/passwd", "/etc/passwd", "..\\..\\test"] {
+        let uri = format!("/file/{}", dangerous_path);
+        let req = test::TestRequest::get().uri(&uri).to_request();
+        let resp = test::call_service(&app, req).await;
+        
+        assert!(!resp.status().is_success(), "Should reject directory traversal: {}", dangerous_path);
+    }
+    
+    Ok(())
+}
+
+#[actix_web::test]
+async fn test_all_images_uses_file_endpoint() -> std::io::Result<()> {
+    // Create a temporary directory with test images
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    
+    // Create some test images
+    for i in 1..=3 {
+        let file_path = format!("{}/image{}.png", image_path, i);
+        fs::write(&file_path, format!("Test image {}", i))?;
+    }
+    
+    // Create app state
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+    });
+    
+    // Set up the test app
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // Request /all-images
+    let req = test::TestRequest::get().uri("/all-images").to_request();
+    let resp = test::call_service(&app, req).await;
+    
+    assert!(resp.status().is_success());
+    let body = test::read_body(resp).await;
+    let content = String::from_utf8_lossy(&body).to_string();
+    
+    // Verify HTML contains /file/ URLs instead of /image
+    assert!(content.contains("src='/file/"), "Should use /file/ endpoints for images");
+    assert!(content.contains("/file/image1.png"), "Should reference image1.png");
+    assert!(content.contains("/file/image2.png"), "Should reference image2.png");
+    assert!(content.contains("/file/image3.png"), "Should reference image3.png");
+    
+    Ok(())
+}
+
+#[actix_web::test]
+async fn test_image_and_all_images_same_order() -> std::io::Result<()> {
+    // Create a temporary directory with test images in non-alphabetical order
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    
+    // Create images with names that would sort differently than creation order
+    // Create in order: z.png, a.png, m.png
+    // Alphabetically sorted would be: a.png, m.png, z.png
+    fs::write(format!("{}/z.png", image_path), "Z image")?;
+    fs::write(format!("{}/a.png", image_path), "A image")?;
+    fs::write(format!("{}/m.png", image_path), "M image")?;
+    
+    // Create app state
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+    });
+    
+    // Set up the test app
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // Get the order from /all-images
+    let req = test::TestRequest::get().uri("/all-images").to_request();
+    let resp = test::call_service(&app, req).await;
+    let body = test::read_body(resp).await;
+    let all_images_content = String::from_utf8_lossy(&body).to_string();
+    
+    // Extract filenames in order from /all-images HTML
+    // They appear in <div class='image-name'>filename</div> elements
+    let mut all_images_order = Vec::new();
+    
+    let marker = "<div class='image-name'>";
+    let mut idx = 0;
+    while let Some(pos) = all_images_content[idx..].find(marker) {
+        idx = idx + pos + marker.len();
+        if let Some(end) = all_images_content[idx..].find("</div>") {
+            let filename = all_images_content[idx..idx + end].to_string();
+            all_images_order.push(filename);
+            idx = idx + end;
+        }
+    }
+    
+    println!("Order from /all-images: {:?}", all_images_order);
+    
+    // Now get the order from multiple /image calls
+    let mut image_order = Vec::new();
+    for i in 0..3 {
+        let req = test::TestRequest::get().uri("/image").to_request();
+        let resp = test::call_service(&app, req).await;
+        let body = test::read_body(resp).await;
+        let content = String::from_utf8_lossy(&body).to_string();
+        
+        // The content is the actual file content, but we can check which one by content
+        let filename = if content.contains("Z") {
+            "z.png"
+        } else if content.contains("A") {
+            "a.png"
+        } else {
+            "m.png"
+        };
+        
+        image_order.push(filename.to_string());
+        println!("Request {}: served {}", i, filename);
+    }
+    
+    println!("Order from /image: {:?}", image_order);
+    
+    // The orders should match
+    assert_eq!(all_images_order, image_order, 
+        "/all-images order should match /image serving order");
+    
+    Ok(())
+}

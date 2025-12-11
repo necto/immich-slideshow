@@ -36,6 +36,7 @@ dotenv = "0.15"
 notify = "6.1"
 actix-rt = "2.10.0"
 urlencoding = "2.1"
+chrono = { version = "0.4", features = ["serde"] }
 
 [dev-dependencies]
 mockito = "1.2"
