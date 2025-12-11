@@ -370,11 +370,15 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
             .image-info { margin-top: 10px; font-size: 14px; }\
             .image-name { font-weight: bold; word-break: break-word; margin: 5px 0; }\
             .image-date { color: #666; font-size: 13px; }\
-            .image-actions { margin-top: 10px; }\
+            .image-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }\
             .set-next-btn { background-color: #4CAF50; color: white; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; text-decoration: none; display: inline-block; }\
             .set-next-btn:hover { background-color: #45a049; }\
             .image-card.next .set-next-btn { background-color: #ffc107; color: #333; }\
             .image-card.next .set-next-btn:hover { background-color: #ffb300; }\
+            .move-btn { background-color: #2196F3; color: white; padding: 6px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; text-decoration: none; display: inline-block; }\
+            .move-btn:hover { background-color: #0b7dda; }\
+            .move-btn:disabled, .move-btn[disabled] { background-color: #ccc; cursor: not-allowed; }\
+            .move-btn.disabled { pointer-events: none; background-color: #ccc; }\
         </style>\
         </head><body>\
         <h1>Image Gallery</h1>"
@@ -409,6 +413,31 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
 
         let card_class = if index == next_index { "image-card next" } else { "image-card" };
 
+        // Build move buttons
+        let mut move_buttons = String::new();
+        
+        // Move left button (only if not first)
+        if index > 0 {
+            move_buttons.push_str(&format!(
+                "<a href='/all-images?image-name={}&move-to={}' class='move-btn'>← Left</a>",
+                urlencoding::encode(filename),
+                index - 1
+            ));
+        } else {
+            move_buttons.push_str("<span class='move-btn disabled'>← Left</span>");
+        }
+        
+        // Move right button (only if not last)
+        if index < entries.len() - 1 {
+            move_buttons.push_str(&format!(
+                "<a href='/all-images?image-name={}&move-to={}' class='move-btn'>→ Right</a>",
+                urlencoding::encode(filename),
+                index + 1
+            ));
+        } else {
+            move_buttons.push_str("<span class='move-btn disabled'>→ Right</span>");
+        }
+
         html.push_str(&format!(
             "<div class='{}'>\
                 <img src='/file/{}' alt='{}'>\
@@ -418,6 +447,7 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
                 </div>\
                 <div class='image-actions'>\
                     <a href='/all-images?next-index={}' class='set-next-btn'>Set as Next</a>\
+                    {}\
                 </div>\
             </div>",
             card_class,
@@ -425,7 +455,8 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
             filename,
             filename,
             date_str,
-            index
+            index,
+            move_buttons
         ));
     }
 
