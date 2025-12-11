@@ -300,6 +300,7 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
     if !query_string.is_empty() {
         let mut move_to: Option<usize> = None;
         let mut image_name: Option<String> = None;
+        let mut next_index: Option<usize> = None;
 
         for pair in query_string.split('&') {
             if let Some((key, value)) = pair.split_once('=') {
@@ -311,6 +312,9 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
                         image_name = urlencoding::decode(value)
                             .ok()
                             .map(|s| s.to_string());
+                    }
+                    "next-index" => {
+                        next_index = value.parse().ok();
                     }
                     _ => {}
                 }
@@ -329,6 +333,10 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
                 }
                 Ok(_) => {}
             }
+        }
+
+        if let Some(idx) = next_index {
+            data.counter.store(idx, Ordering::SeqCst);
         }
     }
 

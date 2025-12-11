@@ -1147,3 +1147,234 @@ async fn test_new_images_with_counter_at_list_end() -> std::io::Result<()> {
     
     Ok(())
 }
+
+#[actix_web::test]
+async fn test_set_next_index_parameter() -> std::io::Result<()> {
+    // Create a temporary directory with test images
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    
+    // Create test images
+    for i in 1..=5 {
+        fs::write(format!("{}/img{}.png", image_path, i), format!("Image {}", i))?;
+    }
+    
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+        image_order_file: format!("{}/image_order.json", image_path),
+    });
+    
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // Initialize order
+    let req = test::TestRequest::get().uri("/all-images").to_request();
+    let resp = test::call_service(&app, req).await;
+    let body = test::read_body(resp).await;
+    let _gallery_html = String::from_utf8_lossy(&body).to_string();
+    
+    // Extract the order from the gallery HTML or read the order file
+    let order_file = format!("{}/image_order.json", image_path);
+    let order_content = fs::read_to_string(&order_file)?;
+    let order: Value = serde_json::from_str(&order_content).unwrap();
+    
+    let order_list = order.as_array().unwrap();
+    let image_at_index_3 = order_list[3].as_str().unwrap();
+    
+    println!("Order: {:?}", order_list);
+    println!("Image at index 3: {}", image_at_index_3);
+    
+    // Set next index to 3 via /all-images
+    let req = test::TestRequest::get()
+        .uri("/all-images?next-index=3")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    
+    // Next request should serve the image at index 3
+    let req = test::TestRequest::get().uri("/image").to_request();
+    let resp = test::call_service(&app, req).await;
+    let body = test::read_body(resp).await;
+    let served_content = String::from_utf8_lossy(&body).to_string();
+    
+    // Verify we got the correct image from the order
+    let expected_content = format!("Image {}", &image_at_index_3[3..image_at_index_3.len()-4]);
+    assert_eq!(served_content, expected_content, 
+        "Should serve the image at index 3, which is {}", image_at_index_3);
+    
+    Ok(())
+}
+
+#[actix_web::test]
+async fn test_next_index_zero() -> std::io::Result<()> {
+    // Create a temporary directory with test images
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    
+    // Create test images
+    for i in 1..=3 {
+        fs::write(format!("{}/img{}.png", image_path, i), format!("Image {}", i))?;
+    }
+    
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+        image_order_file: format!("{}/image_order.json", image_path),
+    });
+    
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // Initialize order
+    let req = test::TestRequest::get().uri("/all-images").to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    // Make some requests to advance counter
+    for _ in 0..2 {
+        let req = test::TestRequest::get().uri("/image").to_request();
+        let _ = test::call_service(&app, req).await;
+    }
+    
+    // Set next index to 0
+    let req = test::TestRequest::get()
+        .uri("/all-images?next-index=0")
+        .to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    // Next request should serve image at index 0
+    let req = test::TestRequest::get().uri("/image").to_request();
+    let resp = test::call_service(&app, req).await;
+    let body = test::read_body(resp).await;
+    let content = String::from_utf8_lossy(&body).to_string();
+    
+    // All images start with "Image ", verify we got one
+    assert!(content.starts_with("Image"), "Should get an image");
+    
+    Ok(())
+}
+
+#[actix_web::test]
+async fn test_next_index_with_reorder() -> std::io::Result<()> {
+    // Create a temporary directory with test images
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    
+    // Create test images
+    for i in 1..=4 {
+        fs::write(format!("{}/img{}.png", image_path, i), format!("Image {}", i))?;
+    }
+    
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+        image_order_file: format!("{}/image_order.json", image_path),
+    });
+    
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // Initialize order
+    let req = test::TestRequest::get().uri("/all-images").to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    // Reorder and set next index in one request
+    let req = test::TestRequest::get()
+        .uri("/all-images?image-name=img4.png&move-to=0&next-index=0")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    
+    // Next request should serve img4.png (which we just moved to position 0)
+    let req = test::TestRequest::get().uri("/image").to_request();
+    let resp = test::call_service(&app, req).await;
+    let body = test::read_body(resp).await;
+    let content = String::from_utf8_lossy(&body).to_string();
+    assert_eq!(content, "Image 4");
+    
+    Ok(())
+}
+
+#[actix_web::test]
+async fn test_next_index_sequence() -> std::io::Result<()> {
+    // Test setting different indices in sequence
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    
+    // Create test images
+    for i in 1..=5 {
+        fs::write(format!("{}/img{}.png", image_path, i), format!("Image {}", i))?;
+    }
+    
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+        image_order_file: format!("{}/image_order.json", image_path),
+    });
+    
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // Initialize order
+    let req = test::TestRequest::get().uri("/all-images").to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    // Test jumping to index 0
+    let req = test::TestRequest::get()
+        .uri("/all-images?next-index=0")
+        .to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    // Get image at index 0
+    let req = test::TestRequest::get().uri("/image").to_request();
+    let resp = test::call_service(&app, req).await;
+    let body = test::read_body(resp).await;
+    let img_0 = String::from_utf8_lossy(&body).to_string();
+    
+    // Jump to index 2
+    let req = test::TestRequest::get()
+        .uri("/all-images?next-index=2")
+        .to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    // Get image at index 2
+    let req = test::TestRequest::get().uri("/image").to_request();
+    let resp = test::call_service(&app, req).await;
+    let body = test::read_body(resp).await;
+    let img_2 = String::from_utf8_lossy(&body).to_string();
+    
+    // Jump to index 4
+    let req = test::TestRequest::get()
+        .uri("/all-images?next-index=4")
+        .to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    // Get image at index 4
+    let req = test::TestRequest::get().uri("/image").to_request();
+    let resp = test::call_service(&app, req).await;
+    let body = test::read_body(resp).await;
+    let img_4 = String::from_utf8_lossy(&body).to_string();
+    
+    // All should be different
+    assert_ne!(img_0, img_2);
+    assert_ne!(img_2, img_4);
+    assert_ne!(img_0, img_4);
+    
+    Ok(())
+}

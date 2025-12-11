@@ -140,6 +140,35 @@ http://localhost:8080/all-images?image-name=image5.jpg&move-to=0
 http://localhost:8080/all-images?image-name=photo.jpg&move-to=2
 ```
 
+**Setting the Next Image to Serve:**
+
+To jump directly to a specific image without cycling through all images, use the `next-index` parameter:
+```
+http://localhost:8080/all-images?next-index=2
+```
+
+This sets which image will be served on the next `/image` request. The `next-index` parameter accepts a 0-based index into the image list.
+
+Examples:
+```
+# Jump to the first image
+http://localhost:8080/all-images?next-index=0
+
+# Jump to the 5th image
+http://localhost:8080/all-images?next-index=4
+
+# Reorder and set next image in one request
+http://localhost:8080/all-images?image-name=photo.jpg&move-to=0&next-index=0
+```
+
+**Combining Parameters:**
+
+You can combine reordering and next-index parameters in a single request:
+```
+# Move image5.jpg to position 1, then jump to position 0
+http://localhost:8080/all-images?image-name=image5.jpg&move-to=1&next-index=0
+```
+
 **Error Handling:**
 
 If you try to reorder an image that doesn't exist in the order list, the server will return a 400 error with a descriptive message:
