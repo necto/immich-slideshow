@@ -930,3 +930,220 @@ async fn test_reorder_nonexistent_image_returns_error() -> std::io::Result<()> {
     
     Ok(())
 }
+
+#[actix_web::test]
+async fn test_new_images_inserted_after_current_position() -> std::io::Result<()> {
+    // Create a temporary directory with test images
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    
+    // Create initial images
+    for i in 1..=3 {
+        fs::write(format!("{}/img{}.png", image_path, i), format!("Image {}", i))?;
+    }
+    
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+        image_order_file: format!("{}/image_order.json", image_path),
+    });
+    
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // Initialize by requesting all-images to create the order
+    let req = test::TestRequest::get().uri("/all-images").to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    // Check the initial order
+    let order_file = format!("{}/image_order.json", image_path);
+    let initial_order_content = fs::read_to_string(&order_file)?;
+    let initial_order: Value = serde_json::from_str(&initial_order_content).unwrap();
+    
+    println!("Initial order: {:?}", initial_order);
+    
+    // Move counter to position 1 by making a request
+    // This moves counter from 0 to 1
+    let req = test::TestRequest::get().uri("/image").to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    // Current position is now 1, next will be at index 2 % 3
+    // Add a new image
+    fs::write(format!("{}/img4.png", image_path), "Image 4")?;
+    
+    // Make another request which will reload entries and insert the new image
+    // at position next_index + 1 where next_index = 1 % 3 = 1
+    // so it inserts at position 2
+    let req = test::TestRequest::get().uri("/image").to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    // Check the order after adding new image
+    let new_order_content = fs::read_to_string(&order_file)?;
+    let new_order: Value = serde_json::from_str(&new_order_content).unwrap();
+    
+    println!("Order after adding img4: {:?}", new_order);
+    
+    // The new image should be at position 2 (right after position 1)
+    assert_eq!(new_order[2], "img4.png", 
+        "New image should be inserted right after current position");
+    
+    // Verify the array has 4 elements
+    assert_eq!(new_order.as_array().unwrap().len(), 4);
+    
+    Ok(())
+}
+
+#[actix_web::test]
+async fn test_multiple_new_images_near_end_of_list() -> std::io::Result<()> {
+    // Create a temporary directory with test images
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    let order_file = format!("{}/image_order.json", image_path);
+    
+    // Create initial images
+    for i in 1..=5 {
+        fs::write(format!("{}/img{}.png", image_path, i), format!("Image {}", i))?;
+    }
+    
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+        image_order_file: order_file.clone(),
+    });
+    
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // Initialize order
+    let req = test::TestRequest::get().uri("/all-images").to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    // Get the initial order
+    let initial_order_content = fs::read_to_string(&order_file)?;
+    let initial_order: Value = serde_json::from_str(&initial_order_content).unwrap();
+    println!("Initial order: {:?}", initial_order);
+    
+    // Make 4 requests to move counter near the end
+    // After 4 requests, counter will be at 4, next index will be 4 % 5 = 4 (near the end)
+    for _ in 0..4 {
+        let req = test::TestRequest::get().uri("/image").to_request();
+        let _ = test::call_service(&app, req).await;
+    }
+    
+    // Now counter is at 4, next will be at index 4 % 5 = 4
+    // Add two new images
+    fs::write(format!("{}/new_a.png", image_path), "New A")?;
+    fs::write(format!("{}/new_b.png", image_path), "New B")?;
+    
+    // Make another request to trigger the new images insertion
+    let req = test::TestRequest::get().uri("/image").to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    // Check the order after adding new images
+    let new_order_content = fs::read_to_string(&order_file)?;
+    let new_order: Value = serde_json::from_str(&new_order_content).unwrap();
+    
+    println!("Order after adding 2 images: {:?}", new_order);
+    
+    // Verify the array has 7 elements (5 original + 2 new)
+    assert_eq!(new_order.as_array().unwrap().len(), 7, "Should have 7 images total");
+    
+    // The new images should be inserted at positions 5 and 6 (right after position 4)
+    // They should be together at those positions, in some order
+    let new_a_pos = new_order.as_array().unwrap()
+        .iter()
+        .position(|v| v.as_str() == Some("new_a.png"));
+    let new_b_pos = new_order.as_array().unwrap()
+        .iter()
+        .position(|v| v.as_str() == Some("new_b.png"));
+    
+    assert!(new_a_pos.is_some(), "new_a.png should be in the list");
+    assert!(new_b_pos.is_some(), "new_b.png should be in the list");
+    
+    let new_a_idx = new_a_pos.unwrap();
+    let new_b_idx = new_b_pos.unwrap();
+    
+    // Both should be at positions 5 or 6
+    assert!(new_a_idx >= 5 && new_a_idx <= 6, "new_a.png should be at position 5 or 6");
+    assert!(new_b_idx >= 5 && new_b_idx <= 6, "new_b.png should be at position 5 or 6");
+    assert_ne!(new_a_idx, new_b_idx, "new_a and new_b should be at different positions");
+    
+    // Verify that the order of the original images is preserved (except the ones we didn't see)
+    // Position 4 should contain one of the original images
+    let pos_4_value = new_order[4].as_str().unwrap();
+    assert!(pos_4_value.starts_with("img"), "Position 4 should have an original image");
+    
+    Ok(())
+}
+
+#[actix_web::test]
+async fn test_new_images_with_counter_at_list_end() -> std::io::Result<()> {
+    // Create a temporary directory with test images
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    let order_file = format!("{}/image_order.json", image_path);
+    
+    // Create initial images
+    for i in 1..=3 {
+        fs::write(format!("{}/img{}.png", image_path, i), format!("Image {}", i))?;
+    }
+    
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+        image_order_file: order_file.clone(),
+    });
+    
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // Initialize order
+    let req = test::TestRequest::get().uri("/all-images").to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    let initial_order_content = fs::read_to_string(&order_file)?;
+    let initial_order: Value = serde_json::from_str(&initial_order_content).unwrap();
+    println!("Initial order: {:?}", initial_order);
+    
+    // Make requests to position counter at the very end
+    // With 3 images, after 3 requests counter will be at 3
+    // Next index will be 3 % 3 = 0, so we'll insert after position 0
+    for _ in 0..3 {
+        let req = test::TestRequest::get().uri("/image").to_request();
+        let _ = test::call_service(&app, req).await;
+    }
+    
+    // Add a new image when counter is at the end (will wrap to position 0)
+    fs::write(format!("{}/new_late.png", image_path), "New Late")?;
+    
+    // Request to trigger insertion
+    let req = test::TestRequest::get().uri("/image").to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    let new_order_content = fs::read_to_string(&order_file)?;
+    let new_order: Value = serde_json::from_str(&new_order_content).unwrap();
+    
+    println!("Order after counter wrapped: {:?}", new_order);
+    
+    // Should have 4 images
+    assert_eq!(new_order.as_array().unwrap().len(), 4);
+    
+    // The new image should be inserted at position 1 (after position 0)
+    // because counter % 3 = 0, and we insert after 0, so at position 1
+    assert_eq!(new_order[1], "new_late.png", 
+        "New image should be inserted at position 1 (after position 0)");
+    
+    Ok(())
+}

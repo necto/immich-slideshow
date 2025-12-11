@@ -22,8 +22,11 @@ async fn get_image(data: actix_web::web::Data<AppState>, req: HttpRequest) -> ac
         let _ = store_parameters(&data.params_file, query_string);
     }
 
+    // Get current counter before loading entries (so new images are inserted after current position)
+    let counter = data.counter.load(Ordering::SeqCst);
+    
     // Get all image files in the images directory (in order)
-    let entries = get_image_entries(&data.image_dir, &data.image_order_file)?;
+    let entries = get_image_entries(&data.image_dir, &data.image_order_file, counter)?;
 
     if entries.is_empty() {
         return Err(actix_web::error::ErrorInternalServerError("No files found in static directory"));
@@ -80,7 +83,8 @@ async fn get_control_panel(data: actix_web::web::Data<AppState>) -> actix_web::R
 }
 
 /// Get all image files from the image directory in the order specified in the order file
-fn get_image_entries(image_dir: &str, image_order_file: &str) -> actix_web::Result<Vec<PathBuf>> {
+/// New images are inserted right after the current position (next image to serve)
+fn get_image_entries(image_dir: &str, image_order_file: &str, current_counter: usize) -> actix_web::Result<Vec<PathBuf>> {
     // Get all available files from the directory (excluding the order file itself and params file)
     let order_filename = Path::new(image_order_file)
         .file_name()
@@ -126,10 +130,26 @@ fn get_image_entries(image_dir: &str, image_order_file: &str) -> actix_web::Resu
     // Remove files that no longer exist, keep order of remaining files
     order_list.retain(|f| available_files.contains(f));
 
-    // Add any new files that appeared in the directory (at the end)
-    for file in &available_files {
-        if !order_list.contains(file) {
-            order_list.push(file.clone());
+    // Add any new files that appeared in the directory
+    // Insert them right after the current position instead of at the end
+    let new_files: Vec<String> = available_files
+        .iter()
+        .filter(|f| !order_list.contains(f))
+        .cloned()
+        .collect();
+
+    if !new_files.is_empty() {
+        // Calculate the insertion point: right after the current/next image
+        let insert_position = if order_list.is_empty() {
+            0
+        } else {
+            let next_index = current_counter % order_list.len();
+            next_index + 1
+        };
+
+        // Insert new files at the calculated position
+        for (i, file) in new_files.into_iter().enumerate() {
+            order_list.insert(insert_position + i, file);
         }
     }
 
@@ -313,7 +333,9 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
     }
 
     // Get all image files in the images directory (in order)
-    let entries = get_image_entries(&data.image_dir, &data.image_order_file)?;
+    // Pass counter so new images are inserted after current position
+    let counter = data.counter.load(Ordering::SeqCst);
+    let entries = get_image_entries(&data.image_dir, &data.image_order_file, counter)?;
 
     if entries.is_empty() {
         return Ok(HttpResponse::Ok()

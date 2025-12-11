@@ -149,7 +149,10 @@ Error: Image 'nonexistent.jpg' not found in order list
 
 **Order Persistence:**
 
-The image order is saved to `image_order.json` in the working directory and persists across server restarts. When new images are added, they are automatically appended to the end of the order list.
+The image order is saved to `image_order.json` in the working directory and persists across server restarts. When new images are added to the directory:
+- They are inserted right after the current position (the image about to be served next)
+- This means a newly added image will appear immediately on the next request, without waiting to cycle through all existing images
+- Multiple new images are inserted in the order they appear, all right after the current position
 
 #### Parameter Storage and Control Panel
 
