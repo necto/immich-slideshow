@@ -11,6 +11,7 @@ pub struct AppState {
     pub counter: AtomicUsize,
     pub image_dir: String,
     pub params_file: String,
+    pub image_order_file: String,
 }
 
 #[get("/image")]
@@ -21,8 +22,8 @@ async fn get_image(data: actix_web::web::Data<AppState>, req: HttpRequest) -> ac
         let _ = store_parameters(&data.params_file, query_string);
     }
 
-    // Get all image files in the images directory
-    let entries = get_image_entries(&data.image_dir)?;
+    // Get all image files in the images directory (in order)
+    let entries = get_image_entries(&data.image_dir, &data.image_order_file)?;
 
     if entries.is_empty() {
         return Err(actix_web::error::ErrorInternalServerError("No files found in static directory"));
@@ -78,24 +79,109 @@ async fn get_control_panel(data: actix_web::web::Data<AppState>) -> actix_web::R
     }
 }
 
-/// Get all image files from the image directory, sorted by path
-fn get_image_entries(image_dir: &str) -> actix_web::Result<Vec<PathBuf>> {
-    let mut entries = fs::read_dir(image_dir)
+/// Get all image files from the image directory in the order specified in the order file
+fn get_image_entries(image_dir: &str, image_order_file: &str) -> actix_web::Result<Vec<PathBuf>> {
+    // Get all available files from the directory (excluding the order file itself and params file)
+    let order_filename = Path::new(image_order_file)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("image_order.json");
+    
+    let available_files: Vec<String> = fs::read_dir(image_dir)
         .map_err(|e| actix_web::error::ErrorInternalServerError(e))?
         .filter_map(|entry| {
             entry.ok().and_then(|e| {
                 let path = e.path();
                 if path.is_file() {
-                    Some(path)
+                    path.file_name()
+                        .and_then(|n| n.to_str())
+                        .and_then(|s| {
+                            // Exclude metadata files
+                            if s == order_filename || s == "params.json" {
+                                None
+                            } else {
+                                Some(s.to_string())
+                            }
+                        })
                 } else {
                     None
                 }
             })
         })
-        .collect::<Vec<PathBuf>>();
+        .collect();
 
-    entries.sort();
+    // Load or initialize the order list
+    let mut order_list: Vec<String> = if Path::new(image_order_file).exists() {
+        match fs::read_to_string(image_order_file) {
+            Ok(content) => {
+                serde_json::from_str(&content)
+                    .unwrap_or_else(|_| available_files.clone())
+            }
+            Err(_) => available_files.clone(),
+        }
+    } else {
+        available_files.clone()
+    };
+
+    // Remove files that no longer exist, keep order of remaining files
+    order_list.retain(|f| available_files.contains(f));
+
+    // Add any new files that appeared in the directory (at the end)
+    for file in &available_files {
+        if !order_list.contains(file) {
+            order_list.push(file.clone());
+        }
+    }
+
+    // Save the updated order
+    let _ = fs::write(image_order_file, serde_json::to_string_pretty(&order_list).unwrap_or_default());
+
+    // Convert to PathBuf
+    let entries = order_list
+        .into_iter()
+        .map(|filename| Path::new(image_dir).join(filename))
+        .collect();
+
     Ok(entries)
+}
+
+/// Escape HTML special characters
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+/// Reorder images by moving an image to a specific position in the order list
+/// Returns an error if the image is not found in the order list
+fn reorder_images(image_order_file: &str, image_name: &str, target_position: usize) -> Result<(), String> {
+    // Load the current order list
+    let mut order_list: Vec<String> = if Path::new(image_order_file).exists() {
+        let content = fs::read_to_string(image_order_file)
+            .map_err(|e| format!("Failed to read order file: {}", e))?;
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        return Err("Order file not found".to_string());
+    };
+
+    // Find and remove the image from its current position
+    if let Some(current_pos) = order_list.iter().position(|f| f == image_name) {
+        order_list.remove(current_pos);
+    } else {
+        return Err(format!("Image '{}' not found in order list", image_name));
+    }
+
+    // Insert at the target position
+    let insert_pos = std::cmp::min(target_position, order_list.len());
+    order_list.insert(insert_pos, image_name.to_string());
+
+    // Save the updated order
+    fs::write(image_order_file, serde_json::to_string_pretty(&order_list)
+              .map_err(|e| format!("Failed to serialize order list: {}", e))?)
+        .map_err(|e| format!("Failed to write order file: {}", e))?;
+    Ok(())
 }
 
 fn store_parameters(params_file: &str, query_string: &str) -> std::io::Result<()> {
@@ -188,9 +274,46 @@ async fn get_file(data: actix_web::web::Data<AppState>, filename: web::Path<Stri
 }
 
 #[get("/all-images")]
-async fn get_all_images(data: actix_web::web::Data<AppState>) -> actix_web::Result<HttpResponse> {
-    // Get all image files in the images directory
-    let entries = get_image_entries(&data.image_dir)?;
+async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) -> actix_web::Result<HttpResponse> {
+    // Handle reordering if parameters are provided
+    let query_string = req.query_string();
+    if !query_string.is_empty() {
+        let mut move_to: Option<usize> = None;
+        let mut image_name: Option<String> = None;
+
+        for pair in query_string.split('&') {
+            if let Some((key, value)) = pair.split_once('=') {
+                match key {
+                    "move-to" => {
+                        move_to = value.parse().ok();
+                    }
+                    "image-name" => {
+                        image_name = urlencoding::decode(value)
+                            .ok()
+                            .map(|s| s.to_string());
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        if let (Some(target_pos), Some(name)) = (move_to, image_name) {
+            match reorder_images(&data.image_order_file, &name, target_pos) {
+                Err(err) => {
+                    return Ok(HttpResponse::BadRequest()
+                        .content_type("text/html; charset=utf-8")
+                        .body(format!(
+                            "<html><body><h1>Error</h1><p>{}</p><p><a href='/all-images'>Back</a></p></body></html>",
+                            html_escape(&err)
+                        )))
+                }
+                Ok(_) => {}
+            }
+        }
+    }
+
+    // Get all image files in the images directory (in order)
+    let entries = get_image_entries(&data.image_dir, &data.image_order_file)?;
 
     if entries.is_empty() {
         return Ok(HttpResponse::Ok()

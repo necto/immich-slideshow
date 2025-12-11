@@ -29,6 +29,7 @@ async fn main() -> std::io::Result<()> {
         counter: AtomicUsize::new(0),
         image_dir: args.image_dir,
         params_file: "params.json".to_string(),
+        image_order_file: "image_order.json".to_string(),
     });
 
     HttpServer::new(move || {

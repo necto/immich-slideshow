@@ -24,6 +24,7 @@ async fn test_image_cycling() -> std::io::Result<()> {
         counter: AtomicUsize::new(0),
         image_dir: image_path.clone(),
         params_file: temp_params_file.clone(),
+        image_order_file: format!("{}/image_order.json", image_path),
     });
     
     // Set up the test app
@@ -68,6 +69,7 @@ async fn test_parameter_storage_and_retrieval() -> std::io::Result<()> {
         counter: AtomicUsize::new(0),
         image_dir: image_path.clone(),
         params_file: params_file.clone(),
+        image_order_file: format!("{}/image_order.json", image_path),
     });
     
     // Set up the test app
@@ -125,6 +127,7 @@ async fn test_parameter_overwrite() -> std::io::Result<()> {
         counter: AtomicUsize::new(0),
         image_dir: image_path.clone(),
         params_file: params_file.clone(),
+        image_order_file: format!("{}/image_order.json", image_path),
     });
     
     // Set up the test app
@@ -176,6 +179,7 @@ async fn test_control_panel_empty() -> std::io::Result<()> {
         counter: AtomicUsize::new(0),
         image_dir: image_path.clone(),
         params_file: params_file.clone(),
+        image_order_file: format!("{}/image_order.json", image_path),
     });
     
     // Set up the test app
@@ -216,6 +220,7 @@ async fn test_url_encoded_parameters() -> std::io::Result<()> {
         counter: AtomicUsize::new(0),
         image_dir: image_path.clone(),
         params_file: params_file.clone(),
+        image_order_file: format!("{}/image_order.json", image_path),
     });
     
     // Set up the test app
@@ -262,6 +267,7 @@ async fn test_selective_parameter_overwrite() -> std::io::Result<()> {
         counter: AtomicUsize::new(0),
         image_dir: image_path.clone(),
         params_file: params_file.clone(),
+        image_order_file: format!("{}/image_order.json", image_path),
     });
     
     // Set up the test app
@@ -328,6 +334,7 @@ async fn test_all_images_page() -> std::io::Result<()> {
         counter: AtomicUsize::new(0),
         image_dir: image_path.clone(),
         params_file: format!("{}/params.json", image_path),
+        image_order_file: format!("{}/image_order.json", image_path),
     });
     
     // Set up the test app
@@ -374,6 +381,7 @@ async fn test_all_images_next_indicator() -> std::io::Result<()> {
         counter: AtomicUsize::new(2),
         image_dir: image_path.clone(),
         params_file: format!("{}/params.json", image_path),
+        image_order_file: format!("{}/image_order.json", image_path),
     });
     
     // Set up the test app
@@ -428,6 +436,7 @@ async fn test_all_images_empty_directory() -> std::io::Result<()> {
         counter: AtomicUsize::new(0),
         image_dir: image_path.clone(),
         params_file: format!("{}/params.json", image_path),
+        image_order_file: format!("{}/image_order.json", image_path),
     });
     
     // Set up the test app
@@ -466,6 +475,7 @@ async fn test_file_endpoint() -> std::io::Result<()> {
         counter: AtomicUsize::new(0),
         image_dir: image_path.clone(),
         params_file: format!("{}/params.json", image_path),
+        image_order_file: format!("{}/image_order.json", image_path),
     });
     
     // Set up the test app
@@ -505,6 +515,7 @@ async fn test_file_endpoint_different_files() -> std::io::Result<()> {
         counter: AtomicUsize::new(0),
         image_dir: image_path.clone(),
         params_file: format!("{}/params.json", image_path),
+        image_order_file: format!("{}/image_order.json", image_path),
     });
     
     // Set up the test app
@@ -542,6 +553,7 @@ async fn test_file_endpoint_not_found() -> std::io::Result<()> {
         counter: AtomicUsize::new(0),
         image_dir: image_path.clone(),
         params_file: format!("{}/params.json", image_path),
+        image_order_file: format!("{}/image_order.json", image_path),
     });
     
     // Set up the test app
@@ -573,6 +585,7 @@ async fn test_file_endpoint_directory_traversal() -> std::io::Result<()> {
         counter: AtomicUsize::new(0),
         image_dir: image_path.clone(),
         params_file: format!("{}/params.json", image_path),
+        image_order_file: format!("{}/image_order.json", image_path),
     });
     
     // Set up the test app
@@ -611,6 +624,7 @@ async fn test_all_images_uses_file_endpoint() -> std::io::Result<()> {
         counter: AtomicUsize::new(0),
         image_dir: image_path.clone(),
         params_file: format!("{}/params.json", image_path),
+        image_order_file: format!("{}/image_order.json", image_path),
     });
     
     // Set up the test app
@@ -655,6 +669,7 @@ async fn test_image_and_all_images_same_order() -> std::io::Result<()> {
         counter: AtomicUsize::new(0),
         image_dir: image_path.clone(),
         params_file: format!("{}/params.json", image_path),
+        image_order_file: format!("{}/image_order.json", image_path),
     });
     
     // Set up the test app
@@ -713,6 +728,205 @@ async fn test_image_and_all_images_same_order() -> std::io::Result<()> {
     // The orders should match
     assert_eq!(all_images_order, image_order, 
         "/all-images order should match /image serving order");
+    
+    Ok(())
+}
+
+#[actix_web::test]
+async fn test_reorder_images_move_to_position() -> std::io::Result<()> {
+    // Create a temporary directory with test images
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    let order_file = format!("{}/image_order.json", image_path);
+    
+    // Create test images
+    for i in 1..=3 {
+        let file_path = format!("{}/image{}.png", image_path, i);
+        fs::write(&file_path, format!("Test image {}", i))?;
+    }
+    
+    // Create app state
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+        image_order_file: order_file.clone(),
+    });
+    
+    // Set up the test app
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // First request to initialize order
+    let req = test::TestRequest::get().uri("/all-images").to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    // Request to move image2.png to position 0
+    let req = test::TestRequest::get()
+        .uri("/all-images?image-name=image2.png&move-to=0")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    
+    // Verify the order changed by checking the /image endpoint
+    // First call should now serve image2.png
+    let req = test::TestRequest::get().uri("/image").to_request();
+    let resp = test::call_service(&app, req).await;
+    let body = test::read_body(resp).await;
+    let content = String::from_utf8_lossy(&body).to_string();
+    
+    assert_eq!(content, "Test image 2");
+    
+    Ok(())
+}
+
+#[actix_web::test]
+async fn test_reorder_images_persistence() -> std::io::Result<()> {
+    // Create a temporary directory with test images
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    let order_file = format!("{}/image_order.json", image_path);
+    
+    // Create test images
+    for i in 1..=3 {
+        fs::write(format!("{}/file{}.png", image_path, i), format!("Image {}", i))?;
+    }
+    
+    // Create app state
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+        image_order_file: order_file.clone(),
+    });
+    
+    // Set up the test app
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // Initialize order
+    let req = test::TestRequest::get().uri("/all-images").to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    // Reorder: move file3.png to position 0
+    let req = test::TestRequest::get()
+        .uri("/all-images?image-name=file3.png&move-to=0")
+        .to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    // Check the saved order file
+    let order_content = fs::read_to_string(&order_file)?;
+    let parsed: Value = serde_json::from_str(&order_content).unwrap();
+    
+    // file3.png should be at index 0
+    assert_eq!(parsed[0], "file3.png");
+    
+    Ok(())
+}
+
+#[actix_web::test]
+async fn test_reorder_multiple_times() -> std::io::Result<()> {
+    // Create a temporary directory with test images
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    
+    for i in 1..=4 {
+        fs::write(format!("{}/img{}.png", image_path, i), format!("Image {}", i))?;
+    }
+    
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+        image_order_file: format!("{}/image_order.json", image_path),
+    });
+    
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // Initialize
+    let req = test::TestRequest::get().uri("/all-images").to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    // Move img4 to position 0
+    let req = test::TestRequest::get()
+        .uri("/all-images?image-name=img4.png&move-to=0")
+        .to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    // Move img2 to position 1
+    let req = test::TestRequest::get()
+        .uri("/all-images?image-name=img2.png&move-to=1")
+        .to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    // Verify /image serves in correct order
+    let mut served_images = Vec::new();
+    for _ in 0..4 {
+        let req = test::TestRequest::get().uri("/image").to_request();
+        let resp = test::call_service(&app, req).await;
+        let body = test::read_body(resp).await;
+        let content = String::from_utf8_lossy(&body).to_string();
+        served_images.push(content);
+    }
+    
+    assert_eq!(served_images[0], "Image 4"); // img4.png first
+    assert_eq!(served_images[1], "Image 2"); // img2.png second
+    
+    Ok(())
+}
+
+#[actix_web::test]
+async fn test_reorder_nonexistent_image_returns_error() -> std::io::Result<()> {
+    // Create a temporary directory with test images
+    let temp_dir = tempdir()?;
+    let image_path = temp_dir.path().to_str().unwrap().to_string();
+    
+    for i in 1..=3 {
+        fs::write(format!("{}/image{}.png", image_path, i), format!("Image {}", i))?;
+    }
+    
+    let app_state = actix_web::web::Data::new(AppState {
+        counter: AtomicUsize::new(0),
+        image_dir: image_path.clone(),
+        params_file: format!("{}/params.json", image_path),
+        image_order_file: format!("{}/image_order.json", image_path),
+    });
+    
+    let app = test::init_service(
+        App::new()
+            .app_data(app_state)
+            .configure(setup_app)
+    ).await;
+    
+    // Initialize the order
+    let req = test::TestRequest::get().uri("/all-images").to_request();
+    let _ = test::call_service(&app, req).await;
+    
+    // Try to move a non-existent image
+    let req = test::TestRequest::get()
+        .uri("/all-images?image-name=nonexistent.png&move-to=0")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    
+    // Should return 400 Bad Request
+    assert_eq!(resp.status(), 400);
+    
+    let body = test::read_body(resp).await;
+    let content = String::from_utf8_lossy(&body).to_string();
+    
+    // Should contain error message about image not found
+    assert!(content.contains("not found"), "Error message should mention image not found");
+    assert!(content.contains("nonexistent.png"), "Error should mention the image name");
     
     Ok(())
 }

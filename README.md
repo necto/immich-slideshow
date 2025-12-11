@@ -104,6 +104,53 @@ cargo run --bin image-server
 
 Then access the images at: http://localhost:8080/image
 
+#### Image Ordering and Gallery
+
+The image server maintains an explicit ordering of images in `image_order.json` instead of using alphabetical sorting. This allows you to control the sequence in which images are served.
+
+**Viewing the Gallery:**
+
+Access the interactive gallery interface at:
+```
+http://localhost:8080/all-images
+```
+
+This displays all images in their current order with:
+- A "Next image to serve" indicator showing which image will be served next
+- An interactive grid layout with all images
+- File modification dates for each image
+
+**Reordering Images:**
+
+To move an image to a specific position, use the `/all-images` endpoint with query parameters:
+```
+http://localhost:8080/all-images?image-name=photo.jpg&move-to=0
+```
+
+Parameters:
+- `image-name`: The filename of the image to move (URL-encoded if necessary)
+- `move-to`: The target position (0-based index)
+
+Examples:
+```
+# Move image5.jpg to the first position
+http://localhost:8080/all-images?image-name=image5.jpg&move-to=0
+
+# Move photo.jpg to position 2
+http://localhost:8080/all-images?image-name=photo.jpg&move-to=2
+```
+
+**Error Handling:**
+
+If you try to reorder an image that doesn't exist in the order list, the server will return a 400 error with a descriptive message:
+```
+Error: Image 'nonexistent.jpg' not found in order list
+```
+
+**Order Persistence:**
+
+The image order is saved to `image_order.json` in the working directory and persists across server restarts. When new images are added, they are automatically appended to the end of the order list.
+
 #### Parameter Storage and Control Panel
 
 The image server includes a parameter storage feature that captures HTTP GET parameters and makes them retrievable via a control panel:
