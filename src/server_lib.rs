@@ -439,6 +439,15 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
             ));
         }
         
+        // Move to begin button (only if not already at begin)
+        if index > 0 {
+            move_buttons.push_str(&format!(
+                "<a href='/all-images?image-name={}&move-to={}' class='move-btn' title='To Begin'>⤒</a>",
+                urlencoding::encode(filename),
+                0
+            ));
+        }
+        
         // Move to end button (only if not already at end)
         if index < entries.len() - 1 {
             move_buttons.push_str(&format!(
