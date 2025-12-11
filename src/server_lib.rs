@@ -441,19 +441,27 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
         
         // Move to begin button (only if not already at begin)
         if index > 0 {
+            // If moving an image from after current to before current, we need to adjust the current index
+            // (the image we removed shifts indices, so increment by 1)
+            let new_next_index = if index <= next_index { next_index + 1 } else { next_index };
             move_buttons.push_str(&format!(
-                "<a href='/all-images?image-name={}&move-to={}' class='move-btn' title='To Begin'>⤒</a>",
+                "<a href='/all-images?image-name={}&move-to={}&next-index={}' class='move-btn' title='To Begin'>⤒</a>",
                 urlencoding::encode(filename),
-                0
+                0,
+                new_next_index
             ));
         }
         
         // Move to end button (only if not already at end)
         if index < entries.len() - 1 {
+            // If moving an image from before current to after current, we need to adjust the current index
+            // (the image we removed shifts indices, so decrement by 1)
+            let new_next_index = if index < next_index { next_index - 1 } else { next_index };
             move_buttons.push_str(&format!(
-                "<a href='/all-images?image-name={}&move-to={}' class='move-btn' title='To End'>⤓</a>",
+                "<a href='/all-images?image-name={}&move-to={}&next-index={}' class='move-btn' title='To End'>⤓</a>",
                 urlencoding::encode(filename),
-                entries.len() - 1
+                entries.len() - 1,
+                new_next_index
             ));
         }
 
