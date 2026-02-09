@@ -82,16 +82,8 @@ async fn get_control_panel(data: actix_web::web::Data<AppState>) -> actix_web::R
     }
 }
 
-/// Get all image files from the image directory in the order specified in the order file
-/// New images are inserted right after the current position (next image to serve)
-fn get_image_entries(image_dir: &str, image_order_file: &str, current_counter: usize) -> actix_web::Result<Vec<PathBuf>> {
-    // Get all available files from the directory (excluding the order file itself and params file)
-    let order_filename = Path::new(image_order_file)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("image_order.json");
-    
-    let available_files: Vec<String> = fs::read_dir(image_dir)
+fn list_image_files(image_dir: &str, order_filename: &str) -> actix_web::Result<Vec<String>> {
+    let mut files: Vec<_> = fs::read_dir(image_dir)
         .map_err(|e| actix_web::error::ErrorInternalServerError(e))?
         .filter_map(|entry| {
             entry.ok().and_then(|e| {
@@ -113,6 +105,20 @@ fn get_image_entries(image_dir: &str, image_order_file: &str, current_counter: u
             })
         })
         .collect();
+    files.sort();
+    Ok(files)
+}
+
+/// Get all image files from the image directory in the order specified in the order file
+/// New images are inserted right after the current position (next image to serve)
+fn get_image_entries(image_dir: &str, image_order_file: &str, current_counter: usize) -> actix_web::Result<Vec<PathBuf>> {
+    // Get all available files from the directory (excluding the order file itself and params file)
+    let order_filename = Path::new(image_order_file)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("image_order.json");
+ 
+    let available_files: Vec<String> = list_image_files(image_dir, order_filename)?;
 
     // Load or initialize the order list
     let mut order_list: Vec<String> = if Path::new(image_order_file).exists() {
