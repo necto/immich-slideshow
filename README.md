@@ -122,51 +122,32 @@ This displays all images in their current order with:
 
 **Reordering Images:**
 
-To move an image to a specific position, use the `/all-images` endpoint with query parameters:
-```
-http://localhost:8080/all-images?image-name=photo.jpg&move-to=0
-```
+Use the interactive buttons in the gallery interface to reorder images. The buttons submit POST requests to the `/all-images` endpoint:
+
+- ← → : Move image left/right by one position
+- ↯ : Move image to just after the current "next" image
+- ⤒ ⤓ : Move image to beginning/end of the list
+- "Set Next": Jump to this image on the next `/image` request
+
+**API for Reordering:**
+
+For programmatic access, POST to `/all-images` with form data:
 
 Parameters:
-- `image-name`: The filename of the image to move (URL-encoded if necessary)
+- `image-name`: The filename of the image to move
 - `move-to`: The target position (0-based index)
+- `next-index`: Sets which image will be served next (0-based index)
 
-Examples:
-```
+Example using curl:
+```bash
 # Move image5.jpg to the first position
-http://localhost:8080/all-images?image-name=image5.jpg&move-to=0
-
-# Move photo.jpg to position 2
-http://localhost:8080/all-images?image-name=photo.jpg&move-to=2
-```
-
-**Setting the Next Image to Serve:**
-
-To jump directly to a specific image without cycling through all images, use the `next-index` parameter:
-```
-http://localhost:8080/all-images?next-index=2
-```
-
-This sets which image will be served on the next `/image` request. The `next-index` parameter accepts a 0-based index into the image list.
-
-Examples:
-```
-# Jump to the first image
-http://localhost:8080/all-images?next-index=0
+curl -X POST -d "image-name=image5.jpg&move-to=0" http://localhost:8080/all-images
 
 # Jump to the 5th image
-http://localhost:8080/all-images?next-index=4
+curl -X POST -d "next-index=4" http://localhost:8080/all-images
 
 # Reorder and set next image in one request
-http://localhost:8080/all-images?image-name=photo.jpg&move-to=0&next-index=0
-```
-
-**Combining Parameters:**
-
-You can combine reordering and next-index parameters in a single request:
-```
-# Move image5.jpg to position 1, then jump to position 0
-http://localhost:8080/all-images?image-name=image5.jpg&move-to=1&next-index=0
+curl -X POST -d "image-name=photo.jpg&move-to=0&next-index=0" http://localhost:8080/all-images
 ```
 
 **Error Handling:**

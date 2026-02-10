@@ -1,9 +1,10 @@
 use actix_files::NamedFile;
-use actix_web::{get, web, HttpRequest, HttpResponse, http::header};
+use actix_web::{get, post, web, HttpRequest, HttpResponse, http::header};
 use std::path::{PathBuf, Path};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::fs;
 use serde_json::{json, Value};
+use serde::Deserialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::{DateTime, Local};
 
@@ -12,6 +13,16 @@ pub struct AppState {
     pub image_dir: String,
     pub params_file: String,
     pub image_order_file: String,
+}
+
+#[derive(Deserialize)]
+pub struct ReorderForm {
+    #[serde(rename = "move-to")]
+    move_to: Option<usize>,
+    #[serde(rename = "image-name")]
+    image_name: Option<String>,
+    #[serde(rename = "next-index")]
+    next_index: Option<usize>,
 }
 
 #[get("/image")]
@@ -287,52 +298,38 @@ async fn get_file(data: actix_web::web::Data<AppState>, filename: web::Path<Stri
 }
 
 #[get("/all-images")]
-async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) -> actix_web::Result<HttpResponse> {
+async fn get_all_images(data: actix_web::web::Data<AppState>) -> actix_web::Result<HttpResponse> {
+    render_all_images_page(&data)
+}
+
+#[post("/all-images")]
+async fn post_all_images(
+    data: actix_web::web::Data<AppState>,
+    form: web::Form<ReorderForm>,
+) -> actix_web::Result<HttpResponse> {
     // Handle reordering if parameters are provided
-    let query_string = req.query_string();
-    if !query_string.is_empty() {
-        let mut move_to: Option<usize> = None;
-        let mut image_name: Option<String> = None;
-        let mut next_index: Option<usize> = None;
-
-        for pair in query_string.split('&') {
-            if let Some((key, value)) = pair.split_once('=') {
-                match key {
-                    "move-to" => {
-                        move_to = value.parse().ok();
-                    }
-                    "image-name" => {
-                        image_name = urlencoding::decode(value)
-                            .ok()
-                            .map(|s| s.to_string());
-                    }
-                    "next-index" => {
-                        next_index = value.parse().ok();
-                    }
-                    _ => {}
-                }
+    if let (Some(target_pos), Some(name)) = (form.move_to, &form.image_name) {
+        match reorder_images(&data.image_order_file, name, target_pos) {
+            Err(err) => {
+                return Ok(HttpResponse::BadRequest()
+                    .content_type("text/html; charset=utf-8")
+                    .body(format!(
+                        "<html><body><h1>Error</h1><p>{}</p><p><a href='/all-images'>Back</a></p></body></html>",
+                        html_escape(&err)
+                    )))
             }
-        }
-
-        if let (Some(target_pos), Some(name)) = (move_to, image_name) {
-            match reorder_images(&data.image_order_file, &name, target_pos) {
-                Err(err) => {
-                    return Ok(HttpResponse::BadRequest()
-                        .content_type("text/html; charset=utf-8")
-                        .body(format!(
-                            "<html><body><h1>Error</h1><p>{}</p><p><a href='/all-images'>Back</a></p></body></html>",
-                            html_escape(&err)
-                        )))
-                }
-                Ok(_) => {}
-            }
-        }
-
-        if let Some(idx) = next_index {
-            data.counter.store(idx, Ordering::SeqCst);
+            Ok(_) => {}
         }
     }
 
+    if let Some(idx) = form.next_index {
+        data.counter.store(idx, Ordering::SeqCst);
+    }
+
+    render_all_images_page(&data)
+}
+
+fn render_all_images_page(data: &actix_web::web::Data<AppState>) -> actix_web::Result<HttpResponse> {
     // Get all image files in the images directory (in order)
     // Pass counter so new images are inserted after current position
     let counter = data.counter.load(Ordering::SeqCst);
@@ -372,6 +369,7 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
             .move-btn:hover { background-color: #0b7dda; }\
             .move-btn:disabled, .move-btn[disabled] { background-color: #ccc; cursor: not-allowed; }\
             .move-btn.disabled { pointer-events: none; background-color: #ccc; }\
+            form { display: inline; }\
         </style>\
         </head><body>\
         <h1>Image Gallery</h1>"
@@ -406,31 +404,39 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
 
         let card_class = if index == next_index { "image-card next" } else { "image-card" };
 
-        // Build move buttons
+        // Build move buttons using POST forms
         let mut move_buttons = String::new();
-        
+
         // Move left button (only if not first)
         if index > 0 {
             move_buttons.push_str(&format!(
-                "<a href='/all-images?image-name={}&move-to={}' class='move-btn' title='Left'>←</a>",
-                urlencoding::encode(filename),
+                "<form method='post' action='/all-images' style='display:inline'>\
+                    <input type='hidden' name='image-name' value='{}'>\
+                    <input type='hidden' name='move-to' value='{}'>\
+                    <button type='submit' class='move-btn' title='Left'>←</button>\
+                </form>",
+                html_escape(filename),
                 index - 1
             ));
         } else {
             move_buttons.push_str("<span class='move-btn disabled' title='Left'>←</span>");
         }
-        
+
         // Move right button (only if not last)
         if index < entries.len() - 1 {
             move_buttons.push_str(&format!(
-                "<a href='/all-images?image-name={}&move-to={}' class='move-btn' title='Right'>→</a>",
-                urlencoding::encode(filename),
+                "<form method='post' action='/all-images' style='display:inline'>\
+                    <input type='hidden' name='image-name' value='{}'>\
+                    <input type='hidden' name='move-to' value='{}'>\
+                    <button type='submit' class='move-btn' title='Right'>→</button>\
+                </form>",
+                html_escape(filename),
                 index + 1
             ));
         } else {
             move_buttons.push_str("<span class='move-btn disabled' title='Right'>→</span>");
         }
-        
+
         // Move to after current image button (only if not already after current)
         if index != next_index + 1 && index != next_index {
             // If moving an image from before current to after current, we need to adjust the current index
@@ -438,38 +444,62 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
             let new_next_index = if index < next_index { next_index - 1 } else { next_index };
             let after_current_pos = if index < next_index { next_index  } else { next_index + 1 };
             move_buttons.push_str(&format!(
-                "<a href='/all-images?image-name={}&move-to={}&next-index={}' class='move-btn' title='After Current'>↯</a>",
-                urlencoding::encode(filename),
+                "<form method='post' action='/all-images' style='display:inline'>\
+                    <input type='hidden' name='image-name' value='{}'>\
+                    <input type='hidden' name='move-to' value='{}'>\
+                    <input type='hidden' name='next-index' value='{}'>\
+                    <button type='submit' class='move-btn' title='After Current'>↯</button>\
+                </form>",
+                html_escape(filename),
                 after_current_pos,
                 new_next_index
             ));
         }
-        
+
         // Move to begin button (only if not already at begin)
         if index > 0 {
             // If moving an image from after current to before current, we need to adjust the current index
             // (the image we removed shifts indices, so increment by 1)
             let new_next_index = if index <= next_index { next_index + 1 } else { next_index };
             move_buttons.push_str(&format!(
-                "<a href='/all-images?image-name={}&move-to={}&next-index={}' class='move-btn' title='To Begin'>⤒</a>",
-                urlencoding::encode(filename),
+                "<form method='post' action='/all-images' style='display:inline'>\
+                    <input type='hidden' name='image-name' value='{}'>\
+                    <input type='hidden' name='move-to' value='{}'>\
+                    <input type='hidden' name='next-index' value='{}'>\
+                    <button type='submit' class='move-btn' title='To Begin'>⤒</button>\
+                </form>",
+                html_escape(filename),
                 0,
                 new_next_index
             ));
         }
-        
+
         // Move to end button (only if not already at end)
         if index < entries.len() - 1 {
             // If moving an image from before current to after current, we need to adjust the current index
             // (the image we removed shifts indices, so decrement by 1)
             let new_next_index = if index < next_index { next_index - 1 } else { next_index };
             move_buttons.push_str(&format!(
-                "<a href='/all-images?image-name={}&move-to={}&next-index={}' class='move-btn' title='To End'>⤓</a>",
-                urlencoding::encode(filename),
+                "<form method='post' action='/all-images' style='display:inline'>\
+                    <input type='hidden' name='image-name' value='{}'>\
+                    <input type='hidden' name='move-to' value='{}'>\
+                    <input type='hidden' name='next-index' value='{}'>\
+                    <button type='submit' class='move-btn' title='To End'>⤓</button>\
+                </form>",
+                html_escape(filename),
                 entries.len() - 1,
                 new_next_index
             ));
         }
+
+        // Set as Next button using POST form
+        let set_next_btn = format!(
+            "<form method='post' action='/all-images' style='display:inline'>\
+                <input type='hidden' name='next-index' value='{}'>\
+                <button type='submit' class='set-next-btn'>Set Next</button>\
+            </form>",
+            index
+        );
 
         html.push_str(&format!(
             "<div class='{}'>\
@@ -479,7 +509,7 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
                     <div class='image-date'>{}</div>\
                 </div>\
                 <div class='image-actions'>\
-                    <a href='/all-images?next-index={}' class='set-next-btn'>Set as Next</a>\
+                    {}\
                     {}\
                 </div>\
             </div>",
@@ -488,7 +518,7 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
             filename,
             filename,
             date_str,
-            index,
+            set_next_btn,
             move_buttons
         ));
     }
@@ -502,5 +532,9 @@ async fn get_all_images(data: actix_web::web::Data<AppState>, req: HttpRequest) 
 
 // Extract the app setup into a separate function for testing
 pub fn setup_app(cfg: &mut web::ServiceConfig) {
-    cfg.service(get_image).service(get_control_panel).service(get_file).service(get_all_images);
+    cfg.service(get_image)
+        .service(get_control_panel)
+        .service(get_file)
+        .service(get_all_images)
+        .service(post_all_images);
 }

@@ -703,8 +703,9 @@ async fn test_reorder_images_move_to_position() -> std::io::Result<()> {
     let _ = test::call_service(&app, req).await;
     
     // Request to move image2.png to position 0
-    let req = test::TestRequest::get()
-        .uri("/all-images?image-name=image2.png&move-to=0")
+    let req = test::TestRequest::post()
+        .uri("/all-images")
+        .set_form(&[("image-name", "image2.png"), ("move-to", "0")])
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -759,8 +760,9 @@ async fn test_reorder_images_persistence() -> std::io::Result<()> {
     let _ = test::call_service(&app, req).await;
     
     // Reorder: move file3.png to position 0
-    let req = test::TestRequest::get()
-        .uri("/all-images?image-name=file3.png&move-to=0")
+    let req = test::TestRequest::post()
+        .uri("/all-images")
+        .set_form(&[("image-name", "file3.png"), ("move-to", "0")])
         .to_request();
     let _ = test::call_service(&app, req).await;
     
@@ -800,14 +802,16 @@ async fn test_reorder_multiple_times() -> std::io::Result<()> {
     let _ = test::call_service(&app, req).await;
     
     // Move img4 to position 0
-    let req = test::TestRequest::get()
-        .uri("/all-images?image-name=img4.png&move-to=0")
+    let req = test::TestRequest::post()
+        .uri("/all-images")
+        .set_form(&[("image-name", "img4.png"), ("move-to", "0")])
         .to_request();
     let _ = test::call_service(&app, req).await;
-    
+
     // Move img2 to position 1
-    let req = test::TestRequest::get()
-        .uri("/all-images?image-name=img2.png&move-to=1")
+    let req = test::TestRequest::post()
+        .uri("/all-images")
+        .set_form(&[("image-name", "img2.png"), ("move-to", "1")])
         .to_request();
     let _ = test::call_service(&app, req).await;
     
@@ -861,8 +865,9 @@ async fn test_reorder_nonexistent_image_returns_error() -> std::io::Result<()> {
     let _ = test::call_service(&app, req).await;
     
     // Try to move a non-existent image
-    let req = test::TestRequest::get()
-        .uri("/all-images?image-name=nonexistent.png&move-to=0")
+    let req = test::TestRequest::post()
+        .uri("/all-images")
+        .set_form(&[("image-name", "nonexistent.png"), ("move-to", "0")])
         .to_request();
     let resp = test::call_service(&app, req).await;
     
@@ -1120,8 +1125,9 @@ async fn test_set_next_index_parameter() -> std::io::Result<()> {
     println!("Image at index 3: {}", image_at_index_3);
     
     // Set next index to 3 via /all-images
-    let req = test::TestRequest::get()
-        .uri("/all-images?next-index=3")
+    let req = test::TestRequest::post()
+        .uri("/all-images")
+        .set_form(&[("next-index", "3")])
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -1168,8 +1174,9 @@ async fn test_next_index_zero() -> std::io::Result<()> {
     }
     
     // Set next index to 0
-    let req = test::TestRequest::get()
-        .uri("/all-images?next-index=0")
+    let req = test::TestRequest::post()
+        .uri("/all-images")
+        .set_form(&[("next-index", "0")])
         .to_request();
     let _ = test::call_service(&app, req).await;
     
@@ -1207,8 +1214,9 @@ async fn test_next_index_with_reorder() -> std::io::Result<()> {
     let _ = test::call_service(&app, req).await;
     
     // Reorder and set next index in one request
-    let req = test::TestRequest::get()
-        .uri("/all-images?image-name=img4.png&move-to=0&next-index=0")
+    let req = test::TestRequest::post()
+        .uri("/all-images")
+        .set_form(&[("image-name", "img4.png"), ("move-to", "0"), ("next-index", "0")])
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -1245,35 +1253,38 @@ async fn test_next_index_sequence() -> std::io::Result<()> {
     let _ = test::call_service(&app, req).await;
     
     // Test jumping to index 0
-    let req = test::TestRequest::get()
-        .uri("/all-images?next-index=0")
+    let req = test::TestRequest::post()
+        .uri("/all-images")
+        .set_form(&[("next-index", "0")])
         .to_request();
     let _ = test::call_service(&app, req).await;
-    
+
     // Get image at index 0
     let req = test::TestRequest::get().uri("/image").to_request();
     let resp = test::call_service(&app, req).await;
     let body = test::read_body(resp).await;
     let img_0 = String::from_utf8_lossy(&body).to_string();
-    
+
     // Jump to index 2
-    let req = test::TestRequest::get()
-        .uri("/all-images?next-index=2")
+    let req = test::TestRequest::post()
+        .uri("/all-images")
+        .set_form(&[("next-index", "2")])
         .to_request();
     let _ = test::call_service(&app, req).await;
-    
+
     // Get image at index 2
     let req = test::TestRequest::get().uri("/image").to_request();
     let resp = test::call_service(&app, req).await;
     let body = test::read_body(resp).await;
     let img_2 = String::from_utf8_lossy(&body).to_string();
-    
+
     // Jump to index 4
-    let req = test::TestRequest::get()
-        .uri("/all-images?next-index=4")
+    let req = test::TestRequest::post()
+        .uri("/all-images")
+        .set_form(&[("next-index", "4")])
         .to_request();
     let _ = test::call_service(&app, req).await;
-    
+
     // Get image at index 4
     let req = test::TestRequest::get().uri("/image").to_request();
     let resp = test::call_service(&app, req).await;
